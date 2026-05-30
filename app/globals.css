@@ -1,0 +1,179 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══ DESIGN TOKENS ════════════════════════════════════════════ */
+:root,
+[data-theme='light'] {
+  --bg:#F2F4F7;--bg2:#E8ECF2;--bg3:#DDE3EC;
+  --surface:#FFFFFF;--surface2:#F6F8FB;--surface3:#EDF0F5;
+  --text:#0C1623;--text2:#283548;--muted:#566880;--faint:#8FA3B8;
+  --green:#0A8F52;--green-hi:#0DAF64;--blue:#1A5FD4;--gold:#8F6500;--red:#C0291D;
+  --border:rgba(12,22,35,.09);--border2:rgba(12,22,35,.05);
+  --shadow-card:0 1px 4px rgba(12,22,35,.06),0 0 0 1px rgba(12,22,35,.06);
+  --shadow-lg:0 8px 32px rgba(12,22,35,.10);--shadow-xl:0 16px 48px rgba(12,22,35,.14);
+  --app-bg:#F2F4F7;--topbar-bg:rgba(242,244,247,.94);--card-bg:#FFFFFF;--field-bg:#FFFFFF;
+  --hover-glow:rgba(10,143,82,.08);
+  --sidebar-bg:#FFFFFF;
+  --sidebar-text:#0C1623;--sidebar-text-muted:#8FA3B8;
+  --sidebar-text-sub:#B0C0D0;--sidebar-item-color:#566880;
+  --sidebar-item-active-color:var(--green);--sidebar-item-active-bg:rgba(10,143,82,.08);
+  --sidebar-badge-bg:#F6F8FB;--sidebar-badge-border:rgba(12,22,35,.09);
+  --sidebar-divider:rgba(12,22,35,.08);--sidebar-nav-label:rgba(12,22,35,.35);
+  --pitch-top:#1B6B2E;--pitch-mid:#1F7E36;--pitch-bot:#196629;
+}
+[data-theme='dark'] {
+  --bg:#0F1724;--bg2:#141E2E;--bg3:#1A2740;
+  --surface:#192233;--surface2:#1F2A3C;--surface3:#263344;
+  --text:#EBF0F8;--text2:#B8C8DC;--muted:#7A96B4;--faint:#4A6080;
+  --green:#22C55E;--green-hi:#4ADE80;--blue:#3B82F6;--gold:#FACC15;--red:#F87171;
+  --border:rgba(255,255,255,.10);--border2:rgba(255,255,255,.06);
+  --shadow-card:0 2px 12px rgba(0,0,0,.35);
+  --shadow-lg:0 8px 32px rgba(0,0,0,.50);--shadow-xl:0 16px 48px rgba(0,0,0,.65);
+  --app-bg:#0F1724;--topbar-bg:rgba(15,23,36,.92);--card-bg:#192233;--field-bg:#141E2E;
+  --hover-glow:rgba(34,197,94,.10);
+  --sidebar-bg:#0C1420;
+  --sidebar-text:rgba(255,255,255,.90);--sidebar-text-muted:rgba(255,255,255,.42);
+  --sidebar-text-sub:rgba(255,255,255,.28);--sidebar-item-color:rgba(255,255,255,.50);
+  --sidebar-item-active-color:#FFFFFF;--sidebar-item-active-bg:rgba(255,255,255,.09);
+  --sidebar-badge-bg:rgba(255,255,255,.05);--sidebar-badge-border:rgba(255,255,255,.09);
+  --sidebar-divider:rgba(255,255,255,.07);--sidebar-nav-label:rgba(255,255,255,.20);
+  --pitch-top:#1B6B2E;--pitch-mid:#1F7E36;--pitch-bot:#196629;
+}
+[data-theme='night'] {
+  --bg:#060810;--bg2:#0A0D18;--bg3:#0F1220;
+  --surface:#0D1020;--surface2:#121628;--surface3:#181C30;
+  --text:#EEF2FA;--text2:#A8B8D0;--muted:#607090;--faint:#384858;
+  --green:#22C55E;--green-hi:#4ADE80;--blue:#2563EB;--gold:#F59E0B;--red:#EF4444;
+  --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.04);
+  --shadow-card:0 2px 16px rgba(0,0,0,.55);
+  --shadow-lg:0 8px 40px rgba(0,0,0,.70);--shadow-xl:0 16px 56px rgba(0,0,0,.80);
+  --app-bg:#060810;--topbar-bg:rgba(6,8,16,.94);--card-bg:#0D1020;--field-bg:#0A0D18;
+  --hover-glow:rgba(34,197,94,.08);
+  --sidebar-bg:#04060C;
+  --sidebar-text:rgba(255,255,255,.88);--sidebar-text-muted:rgba(255,255,255,.38);
+  --sidebar-text-sub:rgba(255,255,255,.25);--sidebar-item-color:rgba(255,255,255,.46);
+  --sidebar-item-active-color:#FFFFFF;--sidebar-item-active-bg:rgba(255,255,255,.08);
+  --sidebar-badge-bg:rgba(255,255,255,.04);--sidebar-badge-border:rgba(255,255,255,.08);
+  --sidebar-divider:rgba(255,255,255,.06);--sidebar-nav-label:rgba(255,255,255,.18);
+  --pitch-top:#1B6B2E;--pitch-mid:#1F7E36;--pitch-bot:#196629;
+}
+
+/* ═══ BASE ══════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
+/* Dashboard shell locks its own scroll; login/register pages scroll freely via normal flow */
+/* Use dynamic viewport height where available */
+.app-shell-root{height:100vh;height:100dvh;overflow:hidden}
+body{font-family:'DM Sans',system-ui,sans-serif;font-size:16px;line-height:1.5;background:var(--app-bg);color:var(--text)}
+button,input,select,textarea{font-family:'DM Sans',system-ui,sans-serif}
+button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+a{-webkit-tap-highlight-color:transparent}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:999px}
+::-webkit-scrollbar-thumb:hover{background:rgba(10,143,82,.30)}
+
+/* ═══ UTILITY CLASSES ═══════════════════════════════════════════ */
+
+/* Card surface used across all pages */
+.broadcast-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-none{scrollbar-width:none}
+.scrollbar-none::-webkit-scrollbar{display:none}
+
+/* Small label / pill used in advertisement page */
+.broadcast-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Fluid horizontal padding — tighter on small screens */
+.fluid-pad {
+  padding-left: clamp(12px, 3vw, 32px);
+  padding-right: clamp(12px, 3vw, 32px);
+  padding-top: 16px;
+}
+@media(min-width:640px){
+  .fluid-pad{padding-top:20px;padding-left:clamp(16px,3vw,32px);padding-right:clamp(16px,3vw,32px)}
+}
+
+/* Spinner used on buttons while loading */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ═══ KEYFRAMES ═════════════════════════════════════════════════ */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+@keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
+@keyframes notif-drop-in{from{opacity:0;transform:scale(.96) translateY(-6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes elite-auth-slide{0%,27%{transform:translateX(0)}33%,60%{transform:translateX(-33.333%)}66%,93%{transform:translateX(-66.666%)}100%{transform:translateX(0)}}
+
+/* ═══ RESPONSIVE ════════════════════════════════════════════════ */
+@media(max-width:1180px){
+  .dashboard-hero-grid,.dashboard-main-grid,.ad-layout-grid,.lineup-layout-grid{grid-template-columns:1fr!important}
+  .stats-grid{grid-template-columns:repeat(3,minmax(160px,1fr))!important}
+}
+@media(max-width:767px){
+  .app-shell{grid-template-columns:1fr!important}
+  .app-workspace{grid-column:1/-1!important}
+  .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .dashboard-hero-grid,.dashboard-main-grid{grid-template-columns:1fr!important;gap:12px!important}
+  .dashboard-mini-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+}
+@media(max-width:640px){
+  .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .lineup-layout-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:380px){
+  .fluid-pad{padding-left:12px!important;padding-right:12px!important}
+  .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(min-width:1440px){
+  .stats-grid{grid-template-columns:repeat(5,minmax(180px,1fr))!important}
+}
+
+/* ─── Focus Visible (keyboard nav accessibility) ───────────────── */
+:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* ─── Print styles ─────────────────────────────────────────────── */
+@media print {
+  .app-shell-root { height: auto; overflow: visible; }
+  header, nav, aside, .sidebar, [data-sidebar] { display: none !important; }
+  .broadcast-card { border: 1px solid #ccc; }
+}
+
+/* ─── Reduced motion ────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

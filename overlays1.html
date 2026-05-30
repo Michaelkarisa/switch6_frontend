@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arena Overlay Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* OverlayPalette exact values */
+    --panel-bg:       rgb(15,15,15);
+    --panel-border:   rgb(60,60,60);
+    --shadow:         rgb(0,0,0);
+    --divider:        rgb(80,80,80);
+    --clock-fg:       rgb(255,220,60);
+    --score-fg:       rgb(255,255,255);
+    --team-name-fg:   rgb(210,210,210);
+    --separator-fg:   rgb(130,130,130);
+    --live-bg:        rgb(25,0,0);
+    --live-border:    rgb(180,0,0);
+    --live-dot:       rgb(220,30,30);
+    --live-text:      rgb(255,255,255);
+    --channel-bg:     rgb(10,10,40);
+    --channel-border: rgb(50,50,120);
+    --channel-text:   rgb(200,200,255);
+    --goal-bg:        rgb(18,72,18);
+    --goal-border:    rgb(40,160,40);
+    --goal-text:      rgb(255,255,100);
+    --goal-scorer:    rgb(200,255,200);
+    --yellow-card:    rgb(230,190,0);
+    --red-card:       rgb(200,0,0);
+    --card-bg:        rgb(25,25,25);
+    --sub-bg:         rgb(20,20,40);
+    --sub-border:     rgb(60,60,120);
+    --sub-in:         rgb(80,210,80);
+    --sub-out:        rgb(210,80,80);
+    --sub-label:      rgb(180,180,180);
+    --field-green:    rgba(34,139,34,0.85);
+    --field-line:     rgba(255,255,255,0.85);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    font-family: 'Barlow', sans-serif;
+    color: #ccc;
+    min-height: 100vh;
+  }
+
+  /* ── App shell ── */
+  .shell {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    background: #0d0d14;
+    border-right: 1px solid #1e1e2e;
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .sidebar-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #444;
+    padding: 8px 18px 12px;
+  }
+  .nav-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    padding: 10px 18px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 13px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.15s;
+    border-left: 2px solid transparent;
+  }
+  .nav-btn:hover { color: #aaa; background: rgba(255,255,255,0.03); }
+  .nav-btn.active {
+    color: var(--clock-fg);
+    border-left-color: var(--clock-fg);
+    background: rgba(255,220,60,0.05);
+  }
+  .nav-btn .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  .sidebar-sep { height: 1px; background: #1a1a26; margin: 8px 0; }
+
+  /* ── Controls panel ── */
+  .controls {
+    padding: 16px 18px;
+    border-top: 1px solid #1e1e2e;
+    margin-top: auto;
+  }
+  .controls-title {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #444;
+    margin-bottom: 12px;
+  }
+  .ctrl-row { margin-bottom: 10px; }
+  .ctrl-label { font-size: 11px; color: #555; margin-bottom: 4px; display: block; }
+  .ctrl-input {
+    width: 100%;
+    background: #111118;
+    border: 1px solid #222230;
+    border-radius: 4px;
+    color: #aaa;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-family: 'Barlow', sans-serif;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .ctrl-input:focus { border-color: #444; color: #ddd; }
+  .ctrl-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+
+  /* ── Main area ── */
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Topbar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 24px;
+    border-bottom: 1px solid #1a1a26;
+    background: #0d0d14;
+  }
+  .topbar-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--clock-fg);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .topbar-sub { font-size: 11px; color: #444; margin-left: auto; }
+  .badge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 3px;
+    background: rgba(255,220,60,0.12);
+    color: var(--clock-fg);
+    border: 1px solid rgba(255,220,60,0.2);
+  }
+
+  /* ── Canvas area ── */
+  .canvas-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    background: radial-gradient(ellipse at center, #111118 0%, #07070b 100%);
+    position: relative;
+  }
+
+  /* 16:9 at 1280×720 — scaled to fit */
+  .canvas {
+    width: 100%;
+    max-width: 960px;
+    aspect-ratio: 16/9;
+    background: #1a2a1a;
+    position: relative;
+    overflow: hidden;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px #222, 0 24px 80px rgba(0,0,0,0.8);
+
+    /* mock video background */
+    background-image:
+      linear-gradient(160deg, rgba(20,60,20,0.9) 0%, rgba(15,40,15,0.95) 100%);
+  }
+
+  /* Pitch lines as background */
+  .canvas::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(0deg,  rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 60px 40px;
+  }
+  /* Centre line */
+  .canvas::after {
+    content: '';
+    position: absolute;
+    left: 50%; top: 0; bottom: 0;
+    width: 1px;
+    background: rgba(255,255,255,0.06);
+  }
+
+  /* ── Widget panels ── */
+  /* Scorebar  — StreamConfig: x=12 y=12 h=36 pad=8 radius=6 */
+  .scorebar {
+    position: absolute;
+    top: calc(12 / 720 * 100%);
+    left: calc(12 / 1280 * 100%);
+    height: calc(36 / 720 * 100%);
+    min-width: 42%;
+    max-width: 80%;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding: 0 calc(8 / 1280 * 100%);
+    gap: 0;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .clock {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(10px, 1.6vw, 18px);
+    font-weight: 600;
+    color: var(--clock-fg);
+    min-width: 3.5em;
+    text-shadow: 1px 1px 0 #000;
+    letter-spacing: 0.5px;
+  }
+  .sb-divider {
+    width: 1px;
+    height: 60%;
+    background: var(--divider);
+    margin: 0 0.5em;
+    flex-shrink: 0;
+  }
+  .team-block {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+  }
+  .team-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(9px, 1.3vw, 15px);
+    font-weight: 600;
+    color: var(--team-name-fg);
+    text-shadow: 1px 1px 0 #000;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .score {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(11px, 1.7vw, 19px);
+    font-weight: 700;
+    color: var(--score-fg);
+    text-shadow: 1px 1px 0 #000;
+    min-width: 1.2em;
+    text-align: center;
+  }
+  .score-sep {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(10px, 1.4vw, 16px);
+    color: var(--separator-fg);
+    padding: 0 0.2em;
+    text-shadow: 1px 1px 0 #000;
+  }
+  .period-badge {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(7px, 0.9vw, 10px);
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--clock-fg);
+    background: rgba(255,220,60,0.15);
+    border: 1px solid rgba(255,220,60,0.25);
+    border-radius: 3px;
+    padding: 1px 4px;
+    margin-left: 0.3em;
+    text-transform: uppercase;
+  }
+
+  /* ── Channel badge — x=12 bottom margin=12 w=90 h=28 radius=14 ── */
+  .channel-badge {
+    position: absolute;
+    bottom: calc(12 / 720 * 100%);
+    left: calc(12 / 1280 * 100%);
+    height: calc(28 / 720 * 100%);
+    min-height: 18px;
+    padding: 0 10px;
+    background: var(--channel-bg);
+    border: 1px solid var(--channel-border);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .channel-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(8px, 1vw, 11px);
+    font-weight: 600;
+    color: var(--channel-text);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-shadow: 1px 1px 0 #000;
+  }
+  .live-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--live-dot);
+    flex-shrink: 0;
+    animation: blink 1s step-start infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.1} }
+  .live-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(8px, 1vw, 11px);
+    font-weight: 700;
+    color: var(--live-text);
+    letter-spacing: 1.5px;
+    text-shadow: 1px 1px 0 #000;
+  }
+
+  /* ── Event banner — x=12 y=scorebar_bottom+8 w=340 h=50 ── */
+  .event-banner {
+    position: absolute;
+    top: calc((12 + 36 + 8) / 720 * 100%);
+    left: calc(12 / 1280 * 100%);
+    width: 30%;
+    min-width: 180px;
+    padding: calc(6 / 720 * 100%) calc(8 / 1280 * 100%);
+    border-radius: 6px;
+    border-width: 2px;
+    border-style: solid;
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .event-banner.visible { display: flex; }
+  .event-banner.goal    { background: var(--goal-bg); border-color: var(--goal-border); }
+  .event-banner.yellow  { background: var(--card-bg); border-color: var(--yellow-card); }
+  .event-banner.red     { background: var(--card-bg); border-color: var(--red-card); }
+  .event-banner.sub     { background: var(--sub-bg);  border-color: var(--sub-border); }
+
+  .banner-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(10px, 1.5vw, 16px);
+    font-weight: 700;
+    text-shadow: 1px 1px 0 #000;
+    letter-spacing: 0.5px;
+  }
+  .goal    .banner-title { color: var(--goal-text); }
+  .yellow  .banner-title { color: var(--yellow-card); }
+  .red     .banner-title { color: var(--red-card); }
+  .sub     .banner-title { color: var(--sub-label); }
+
+  .banner-detail {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(8px, 1.1vw, 12px);
+    font-weight: 500;
+    color: var(--team-name-fg);
+    text-shadow: 1px 1px 0 #000;
+  }
+  .sub-in  { color: var(--sub-in);  }
+  .sub-out { color: var(--sub-out); }
+
+  /* Banner slide-in animation */
+  @keyframes slideIn {
+    from { transform: translateX(-110%); }
+    to   { transform: translateX(0); }
+  }
+  .event-banner.visible { animation: slideIn 0.3s ease-out both; }
+
+  /* ── Lineup overlay ── */
+  .lineup-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .lineup-overlay.visible { display: flex; }
+
+  .field-wrap {
+    position: relative;
+    width: 70%;
+    aspect-ratio: 8/5;
+    background: var(--field-green);
+    border: 2px solid var(--field-line);
+    border-radius: 2px;
+    overflow: visible;
+    margin-top: 5%;
+  }
+
+  /* Field markings */
+  .field-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      /* centre line */
+      linear-gradient(90deg, transparent calc(50% - 1px), rgba(255,255,255,0.7) calc(50% - 1px), rgba(255,255,255,0.7) calc(50% + 1px), transparent calc(50% + 1px));
+  }
+
+  .centre-circle {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 22%; aspect-ratio: 1;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.7);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+
+  .pen-box {
+    position: absolute;
+    top: 50%;
+    width: 14%;
+    height: 55%;
+    border: 1.5px solid rgba(255,255,255,0.7);
+    transform: translateY(-50%);
+  }
+  .pen-box.home { left: 0; border-left: none; }
+  .pen-box.away { right: 0; border-right: none; }
+
+  .player-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none;
+  }
+  .player-circle {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.5);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+    flex-shrink: 0;
+  }
+  .player-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 8px;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000, -1px -1px 0 #000;
+    white-space: nowrap;
+    max-width: 50px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+  }
+
+  .lineup-team-label {
+    position: absolute;
+    top: -22px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.9);
+    text-shadow: 1px 1px 0 #000;
+    white-space: nowrap;
+  }
+  .lineup-team-label.home { left: 0; }
+  .lineup-team-label.away { right: 0; text-align: right; }
+
+  /* ── Subs table ── */
+  .subs-table {
+    position: absolute;
+    right: calc(12 / 1280 * 100%);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 22%;
+    min-width: 160px;
+    background: rgba(10,10,25,0.95);
+    border: 1px solid #333;
+    border-radius: 4px;
+    overflow: hidden;
+    display: none;
+  }
+  .subs-table.visible { display: block; animation: fadeIn 0.4s ease both; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  .subs-header {
+    padding: 8px 10px 6px;
+    background: rgba(255,255,255,0.06);
+    border-bottom: 1px solid #333;
+  }
+  .subs-header-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--clock-fg);
+  }
+  .subs-header-team {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    margin-top: 1px;
+  }
+  .subs-row {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .subs-row:last-child { border-bottom: none; }
+  .subs-in  { color: var(--sub-in);  font-size: 11px; font-weight: 700; flex-shrink:0; }
+  .subs-out { color: var(--sub-out); font-size: 11px; font-weight: 700; flex-shrink:0; }
+  .subs-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    color: #bbb;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .subs-min {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 10px;
+    color: #555;
+    flex-shrink: 0;
+  }
+
+  /* ── Widget info strip ── */
+  .info-strip {
+    background: #0a0a12;
+    border-top: 1px solid #1a1a26;
+    padding: 10px 24px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    font-size: 11px;
+    color: #444;
+  }
+  .info-chip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    background: #111118;
+    border: 1px solid #1e1e2e;
+    border-radius: 4px;
+    color: #666;
+  }
+  .info-chip span { color: #888; }
+  .info-chip .val { color: var(--clock-fg); font-weight: 600; }
+
+  /* ── Buttons ── */
+  .btn {
+    background: none;
+    border: 1px solid #2a2a3a;
+    border-radius: 4px;
+    color: #888;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-family: 'Barlow', sans-serif;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+  .btn:hover { border-color: #444; color: #bbb; background: rgba(255,255,255,0.03); }
+  .btn.primary {
+    background: rgba(255,220,60,0.1);
+    border-color: rgba(255,220,60,0.3);
+    color: var(--clock-fg);
+  }
+  .btn.primary:hover { background: rgba(255,220,60,0.18); }
+  .btn.danger { border-color: rgba(200,0,0,0.3); color: rgb(220,80,80); }
+  .btn.danger:hover { background: rgba(200,0,0,0.1); }
+  .btn.green  { border-color: rgba(40,160,40,0.4); color: rgb(80,200,80); }
+  .btn.green:hover  { background: rgba(40,160,40,0.1); }
+
+  .btn-row { display: flex; flex-direction: column; gap: 5px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-title">Widgets</div>
+
+    <button class="nav-btn active" onclick="showWidget('all')" id="btn-all">
+      <span class="dot"></span> All Widgets
+    </button>
+    <button class="nav-btn" onclick="showWidget('scorebar')" id="btn-scorebar">
+      <span class="dot"></span> Scorebar
+    </button>
+    <button class="nav-btn" onclick="showWidget('badge')" id="btn-badge">
+      <span class="dot"></span> Channel Badge
+    </button>
+    <button class="nav-btn" onclick="showWidget('banner')" id="btn-banner">
+      <span class="dot"></span> Event Banners
+    </button>
+    <button class="nav-btn" onclick="showWidget('lineup')" id="btn-lineup">
+      <span class="dot"></span> Lineup Overlay
+    </button>
+
+    <div class="sidebar-sep"></div>
+    <div class="sidebar-title">Trigger</div>
+
+    <div class="controls">
+      <div class="controls-title">Match State</div>
+
+      <div class="ctrl-row">
+        <label class="ctrl-label">Home Team</label>
+        <input class="ctrl-input" id="homeTeam" value="Arsenal" oninput="updateState()">
+      </div>
+      <div class="ctrl-row">
+        <label class="ctrl-label">Away Team</label>
+        <input class="ctrl-input" id="awayTeam" value="Chelsea" oninput="updateState()">
+      </div>
+      <div class="ctrl-row-2">
+        <div>
+          <label class="ctrl-label">Home</label>
+          <input class="ctrl-input" id="homeScore" type="number" value="2" min="0" oninput="updateState()">
+        </div>
+        <div>
+          <label class="ctrl-label">Away</label>
+          <input class="ctrl-input" id="awayScore" type="number" value="1" min="0" oninput="updateState()">
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <label class="ctrl-label">Period</label>
+        <select class="ctrl-input" id="period" onchange="updateState()">
+          <option value="1ST">1ST</option>
+          <option value="HT">HT</option>
+          <option value="2ND" selected>2ND</option>
+          <option value="FT">FT</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <label class="ctrl-label">Channel</label>
+        <input class="ctrl-input" id="channelName" value="ARENA TV" oninput="updateState()">
+      </div>
+
+      <div class="sidebar-sep"></div>
+      <div class="controls-title">Event Banners</div>
+
+      <div class="btn-row">
+        <button class="btn green" onclick="triggerBanner('goal')">⚽  Goal!</button>
+        <button class="btn" onclick="triggerBanner('yellow')" style="color:var(--yellow-card);border-color:rgba(230,190,0,0.3)">🟨  Yellow Card</button>
+        <button class="btn danger" onclick="triggerBanner('red')">🟥  Red Card</button>
+        <button class="btn" onclick="triggerBanner('sub')" style="color:#8888dd;border-color:rgba(100,100,200,0.3)">🔄  Substitution</button>
+        <button class="btn" onclick="hideBanner()" style="margin-top:4px">✕  Hide Banner</button>
+      </div>
+
+      <div class="sidebar-sep"></div>
+      <div class="controls-title">Lineup</div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="toggleLineup()">⊞  Toggle Lineup</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main area ── -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-title">Overlay Preview</div>
+      <span class="badge">1280 × 720</span>
+      <span class="topbar-sub">Pixel-accurate to Java widget implementations</span>
+    </div>
+
+    <div class="canvas-wrap">
+      <div class="canvas" id="canvas">
+
+        <!-- ── Scorebar ── -->
+        <div class="scorebar" id="scorebar">
+          <span class="clock" id="clock">00:00</span>
+          <div class="sb-divider"></div>
+          <div class="team-block">
+            <span class="team-name" id="homeTeamDisp">Arsenal</span>
+          </div>
+          <span class="score" id="homeScoreDisp">2</span>
+          <span class="score-sep">—</span>
+          <span class="score" id="awayScoreDisp">1</span>
+          <div class="team-block">
+            <span class="team-name" id="awayTeamDisp">Chelsea</span>
+          </div>
+          <span class="period-badge" id="periodDisp">2ND</span>
+        </div>
+
+        <!-- ── Event banner ── -->
+        <div class="event-banner" id="eventBanner">
+          <div class="banner-title" id="bannerTitle">⚽  GOAL!</div>
+          <div class="banner-detail" id="bannerDetail">Saka · Arsenal  74'</div>
+        </div>
+
+        <!-- ── Channel badge ── -->
+        <div class="channel-badge" id="channelBadge">
+          <div class="live-dot" id="liveDot"></div>
+          <span class="live-label">LIVE</span>
+          <div class="sb-divider" style="height:55%;margin:0 4px"></div>
+          <span class="channel-name" id="channelNameDisp">ARENA TV</span>
+        </div>
+
+        <!-- ── Lineup overlay ── -->
+        <div class="lineup-overlay" id="lineupOverlay">
+          <div class="field-wrap" id="fieldWrap">
+            <div class="centre-circle"></div>
+            <div class="pen-box home"></div>
+            <div class="pen-box away"></div>
+            <div class="lineup-team-label home" id="lineupHomeLabel">Arsenal <span style="color:rgba(255,255,255,0.4);font-size:9px">4-3-3</span></div>
+            <div class="lineup-team-label away" id="lineupAwayLabel">Chelsea <span style="color:rgba(255,255,255,0.4);font-size:9px">4-2-3-1</span></div>
+            <!-- Players injected by JS -->
+          </div>
+
+          <!-- Subs table -->
+          <div class="subs-table" id="subsTable">
+            <div class="subs-header">
+              <div class="subs-header-title">Substitutes</div>
+              <div class="subs-header-team" id="subsTeamName">Arsenal</div>
+            </div>
+            <div class="subs-row"><span class="subs-in">▲</span><span class="subs-name">Martinelli</span><span class="subs-min">62'</span></div>
+            <div class="subs-row"><span class="subs-out">▼</span><span class="subs-name">Nketiah</span><span class="subs-min">62'</span></div>
+            <div class="subs-row"><span class="subs-in">▲</span><span class="subs-name">Trossard</span><span class="subs-min">71'</span></div>
+            <div class="subs-row"><span class="subs-out">▼</span><span class="subs-name">Vieira</span><span class="subs-min">71'</span></div>
+          </div>
+        </div>
+
+      </div><!-- /canvas -->
+    </div><!-- /canvas-wrap -->
+
+    <!-- ── Info strip ── -->
+    <div class="info-strip">
+      <div class="info-chip">Canvas <span class="val">1280 × 720</span></div>
+      <div class="info-chip">Overlay pipe <span class="val">640 × 360</span></div>
+      <div class="info-chip">Scorebar <span class="val">x=12 y=12 h=36</span></div>
+      <div class="info-chip">Badge <span class="val">x=12 bottom=12 h=28</span></div>
+      <div class="info-chip">Banner <span class="val">x=12 y=56 w=340 h=50</span></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let clockStart = Date.now();
+let bannerTimer = null;
+let lineupVisible = false;
+let subsPhase = 0;
+let subsInterval = null;
+
+// ── Formation data ─────────────────────────────────────────────────────────
+const HOME_FORMATION = {
+  name: '4-3-3',
+  color: '#c00',
+  players: [
+    { n:'1',  name:'Raya',      pos:'GK',  x:8,  y:50 },
+    { n:'2',  name:'White',     pos:'RB',  x:22, y:20 },
+    { n:'6',  name:'Gabriel',   pos:'CB',  x:22, y:38 },
+    { n:'12', name:'Saliba',    pos:'CB',  x:22, y:62 },
+    { n:'35', name:'Zinchenko', pos:'LB',  x:22, y:80 },
+    { n:'29', name:'Havertz',   pos:'CM',  x:38, y:30 },
+    { n:'5',  name:'Partey',    pos:'DM',  x:38, y:50 },
+    { n:'8',  name:'Ødegaard',  pos:'CAM', x:38, y:70 },
+    { n:'7',  name:'Saka',      pos:'RW',  x:55, y:18 },
+    { n:'11', name:'Martinelli',pos:'LW',  x:55, y:82 },
+    { n:'9',  name:'Jesus',     pos:'ST',  x:55, y:50 },
+  ]
+};
+const AWAY_FORMATION = {
+  name: '4-2-3-1',
+  color: '#006',
+  players: [
+    { n:'1',  name:'Sánchez',  pos:'GK',  x:92, y:50 },
+    { n:'2',  name:'James',    pos:'RB',  x:78, y:20 },
+    { n:'4',  name:'Chalobah', pos:'CB',  x:78, y:38 },
+    { n:'6',  name:'Colwill',  pos:'CB',  x:78, y:62 },
+    { n:'3',  name:'Cucurella',pos:'LB',  x:78, y:80 },
+    { n:'5',  name:'Caicedo',  pos:'DM',  x:65, y:35 },
+    { n:'17', name:'Fernández',pos:'DM',  x:65, y:65 },
+    { n:'7',  name:'Sterling', pos:'AM',  x:52, y:22 },
+    { n:'10', name:'Mount',    pos:'AM',  x:52, y:50 },
+    { n:'11', name:'Mudryk',   pos:'AM',  x:52, y:78 },
+    { n:'9',  name:'Jackson',  pos:'ST',  x:45, y:50 },
+  ]
+};
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+function pad(n){ return String(n).padStart(2,'0'); }
+function updateClock(){
+  const elapsed = Math.floor((Date.now() - clockStart) / 1000);
+  document.getElementById('clock').textContent =
+    pad(Math.floor(elapsed/60)) + ':' + pad(elapsed%60);
+}
+setInterval(updateClock, 1000);
+
+// ── State sync ─────────────────────────────────────────────────────────────
+function updateState(){
+  const ht = document.getElementById('homeTeam').value || 'HOME';
+  const at = document.getElementById('awayTeam').value || 'AWAY';
+  const hs = document.getElementById('homeScore').value;
+  const as = document.getElementById('awayScore').value;
+  const p  = document.getElementById('period').value;
+  const ch = document.getElementById('channelName').value || 'ARENA TV';
+
+  document.getElementById('homeTeamDisp').textContent  = ht.toUpperCase();
+  document.getElementById('awayTeamDisp').textContent  = at.toUpperCase();
+  document.getElementById('homeScoreDisp').textContent = hs;
+  document.getElementById('awayScoreDisp').textContent = as;
+  document.getElementById('periodDisp').textContent    = p;
+  document.getElementById('channelNameDisp').textContent = ch;
+  document.getElementById('lineupHomeLabel').innerHTML =
+    ht.toUpperCase() + ' <span style="color:rgba(255,255,255,0.4);font-size:9px">' + HOME_FORMATION.name + '</span>';
+  document.getElementById('lineupAwayLabel').innerHTML =
+    at.toUpperCase() + ' <span style="color:rgba(255,255,255,0.4);font-size:9px">' + AWAY_FORMATION.name + '</span>';
+  document.getElementById('subsTeamName').textContent = ht;
+}
+
+// ── Widget visibility ──────────────────────────────────────────────────────
+function showWidget(w){
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + w).classList.add('active');
+
+  const all = w === 'all';
+  const show = id => document.getElementById(id).style.opacity = '1';
+  const hide = id => document.getElementById(id).style.opacity = '0';
+
+  ['scorebar','channelBadge','eventBanner','lineupOverlay'].forEach(id => {
+    document.getElementById(id).style.opacity = '0';
+  });
+
+  if (all || w === 'scorebar')  show('scorebar');
+  if (all || w === 'badge')     show('channelBadge');
+  if (all || w === 'banner')    { show('eventBanner'); triggerBanner('goal'); }
+  if (all || w === 'lineup')    { show('lineupOverlay'); showLineup(); }
+  if (all) { show('lineupOverlay'); showLineup(); }
+}
+
+// ── Event banners ──────────────────────────────────────────────────────────
+const BANNER_DATA = {
+  goal:   { cls:'goal',   title:'⚽  GOAL!',         detail: () => 'Saka  ·  ' + (document.getElementById('homeTeam').value||'HOME') + "  74'" },
+  yellow: { cls:'yellow', title:'🟨  YELLOW CARD',   detail: () => 'Caicedo  (' + (document.getElementById('awayTeam').value||'AWAY') + ")  61'" },
+  red:    { cls:'red',    title:'🟥  RED CARD',       detail: () => 'Colwill  (' + (document.getElementById('awayTeam').value||'AWAY') + ")  79'" },
+  sub:    { cls:'sub',    title:'🔄  SUBSTITUTION',  detail: () => '▲ Martinelli  ▼ Nketiah  62\'' },
+};
+
+function triggerBanner(type){
+  if(bannerTimer) clearTimeout(bannerTimer);
+  const b = BANNER_DATA[type];
+  const el = document.getElementById('eventBanner');
+  el.className = 'event-banner ' + b.cls;
+  document.getElementById('bannerTitle').textContent  = b.title;
+  document.getElementById('bannerDetail').textContent = b.detail();
+  // Re-trigger animation
+  el.style.animation = 'none';
+  requestAnimationFrame(() => {
+    el.style.animation = '';
+    el.classList.add('visible');
+  });
+  bannerTimer = setTimeout(hideBanner, 8000);
+}
+
+function hideBanner(){
+  const el = document.getElementById('eventBanner');
+  el.classList.remove('visible');
+}
+
+// ── Lineup overlay ─────────────────────────────────────────────────────────
+function buildPlayers(){
+  const wrap = document.getElementById('fieldWrap');
+  // Remove old player nodes
+  wrap.querySelectorAll('.player-node').forEach(n => n.remove());
+
+  [...HOME_FORMATION.players, ...AWAY_FORMATION.players].forEach((p, i) => {
+    const isHome = i < HOME_FORMATION.players.length;
+    const color  = isHome ? HOME_FORMATION.color : AWAY_FORMATION.color;
+    const node   = document.createElement('div');
+    node.className = 'player-node';
+    node.style.left = p.x + '%';
+    node.style.top  = p.y + '%';
+    node.innerHTML = `
+      <div class="player-circle" style="background:${color};border-color:rgba(255,255,255,0.6)">${p.n}</div>
+      <div class="player-label">${p.name.split(' ').pop()}</div>`;
+    wrap.appendChild(node);
+  });
+}
+
+function showLineup(){
+  lineupVisible = true;
+  buildPlayers();
+  document.getElementById('lineupOverlay').classList.add('visible');
+
+  // Animate subs table in after 2s
+  clearInterval(subsInterval);
+  subsPhase = 0;
+  setTimeout(() => {
+    document.getElementById('subsTeamName').textContent =
+      document.getElementById('homeTeam').value || 'HOME';
+    document.getElementById('subsTable').classList.add('visible');
+  }, 2000);
+}
+
+function hideLineup(){
+  lineupVisible = false;
+  document.getElementById('lineupOverlay').classList.remove('visible');
+  document.getElementById('subsTable').classList.remove('visible');
+  clearInterval(subsInterval);
+}
+
+function toggleLineup(){
+  if(lineupVisible) hideLineup(); else showLineup();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+buildPlayers();
+updateState();
+// Start with all widgets shown
+showWidget('all');
+</script>
+</body>
+</html>
