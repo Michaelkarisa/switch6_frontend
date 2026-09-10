@@ -4,15 +4,16 @@ import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PageShell, MatchesListSkeleton, EmptyState, StatusBadge, Icon } from '@/components/ui';
-import { UserPrefs, getMatchesByAuthorId, type MatchData } from '@/lib/api';
+import { UserPrefs, getMatchesByAuthorId, getReceivedSharedLineups, importSharedLineup, deleteSharedLineup, type MatchData, type ShareLineupData } from '@/lib/api';
 import { useRoleGuard, usePermissions } from '@/lib/auth';
 import { ROLES } from '@/lib/api';
+import { ImageIcon } from 'lucide-react';
 
 const FILTERS = [
   { key: 'all',       label: 'All'       },
   { key: 'live',      label: 'Live'      },
   { key: 'scheduled', label: 'Scheduled' },
-  { key: 'finished',  label: 'Finished'  },
+  { key: 'completed', label: 'Completed'  },
   { key: 'cancelled', label: 'Cancelled' },
 ];
 
@@ -29,7 +30,7 @@ function TeamBadge({ name }: { name?: string }) {
 function ScoreDisplay({ homeScore, awayScore, status }: {
   homeScore?: number | null; awayScore?: number | null; status?: string;
 }) {
-  const isFinished = status === 'finished' || status === 'completed';
+  const isFinished = status === 'completed';
   const hasScores  = homeScore != null && awayScore != null;
   if (!hasScores && !isFinished) {
     return <span className="text-[12px] font-medium text-[color:var(--muted)] px-2 py-1 rounded-md bg-[color:var(--surface2)] sm:px-3 sm:text-[13px]">VS</span>;
@@ -58,6 +59,13 @@ export default function MatchesPage() {
   const [search,     setSearch]     = useState('');
   const [page,       setPage]       = useState(1);
 
+  // Shared lineups
+  const [sharedOpen,    setSharedOpen]    = useState(false);
+  const [sharedLoading, setSharedLoading] = useState(false);
+  const [sharedLineups, setSharedLineups] = useState<ShareLineupData[]>([]);
+  const [importingId,   setImportingId]   = useState<string | null>(null);
+  const [importTarget,  setImportTarget]  = useState('');
+
   useEffect(() => {
     const user = UserPrefs.get();
     if (!user) { router.replace('/login'); return; }
@@ -70,7 +78,7 @@ export default function MatchesPage() {
   const filtered = useMemo(() => allMatches.filter(m => {
     const matchesFilter = filter === 'all' || m.status?.toLowerCase() === filter;
     const matchesSearch = !search ||
-      [m.homeTeam?.name, m.awayTeam?.name, m.league, m.stadium]
+      [m.homeTeam?.name, m.awayTeam?.name, m.league.name, m.stadium]
         .some(v => v?.toLowerCase().includes(search.toLowerCase()));
     return matchesFilter && matchesSearch;
   }), [allMatches, filter, search]);
@@ -84,8 +92,48 @@ export default function MatchesPage() {
   const shareToWhatsApp = (match: MatchData) => {
     const hs = match.homeTeam?.goals ?? '–';
     const as_ = match.awayTeam?.goals ?? '–';
-    const text = `🏟️ *${match.homeTeam?.name ?? 'Home'}* ${hs} – ${as_} *${match.awayTeam?.name ?? 'Away'}*\n🏆 ${match.league ?? 'League'}\n📅 ${match.date}${match.time ? ` at ${match.time}` : ''}\n📍 ${match.stadium ?? ''}\n⚽ Status: ${match.status?.toUpperCase() ?? ''}\n🔗 ID: ${match.id}`;
+    const text = `🏟️ *${match.homeTeam?.name ?? 'Home'}* ${hs} – ${as_} *${match.awayTeam?.name ?? 'Away'}*\n🏆 ${match.league?.name ?? 'League'}\n📅 ${match.date}${match.time ? ` at ${match.time}` : ''}\n📍 ${match.stadium ?? ''}\n⚽ Status: ${match.status?.toUpperCase() ?? ''}\n🔗 ID: ${match.id}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const loadSharedLineups = () => {
+    setSharedOpen(true);
+    setSharedLoading(true);
+    getReceivedSharedLineups()
+      .then(setSharedLineups)
+      .catch(() => setSharedLineups([]))
+      .finally(() => setSharedLoading(false));
+  };
+
+  // Only matches the recipient owns that actually field the shared club —
+  // mirrors the backend's own validation so the picker can't offer an
+  // invalid target.
+  const eligibleTargetsFor = (share: ShareLineupData) =>
+    allMatches.filter(m => m.homeTeam?.id === share.club_id || m.awayTeam?.id === share.club_id);
+
+  const handleImport = async (share: ShareLineupData) => {
+    if (!importTarget) return;
+    setImportingId(share.id);
+    try {
+      await importSharedLineup(share.id, importTarget);
+      const target = allMatches.find(m => m.id === importTarget);
+      setSharedOpen(false);
+      router.push(`/matches/${target?.slug ?? importTarget}/lineup`);
+    } catch (e: any) {
+      alert(e.message || 'Could not import this lineup. Please try again.');
+    } finally {
+      setImportingId(null);
+      setImportTarget('');
+    }
+  };
+
+  const handleDismissShare = async (share: ShareLineupData) => {
+    try {
+      await deleteSharedLineup(share.id);
+      setSharedLineups(prev => prev.filter(s => s.id !== share.id));
+    } catch {
+      // no-op — leave it in the list if the delete failed
+    }
   };
 
   return (
@@ -101,12 +149,18 @@ export default function MatchesPage() {
               {filtered.length !== allMatches.length ? ` of ${allMatches.length}` : ''}
             </p>
           </div>
-          {can.createMatch && (
-            <Link href="/matches/create"
-              className="flex items-center gap-2 px-4 h-9 rounded-lg border-none bg-[color:var(--green)] text-white text-[13px] font-semibold no-underline cursor-pointer">
-              <Icon name="add-circle" size={14} /> Create match
-            </Link>
-          )}
+          <div className="flex items-center gap-2">
+            <button onClick={loadSharedLineups}
+              className="flex items-center gap-2 px-3.5 h-9 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface2)] text-[color:var(--text)] text-[13px] font-medium cursor-pointer hover:border-green-500/40 transition-colors">
+              <Icon name="share" size={14} /> Shared lineups
+            </button>
+            {can.createMatch && (
+              <Link href="/matches/create"
+                className="flex items-center gap-2 px-4 h-9 rounded-lg border-none bg-[color:var(--green)] text-white text-[13px] font-semibold no-underline cursor-pointer">
+                <Icon name="add-circle" size={14} /> Create match
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Filters: search full-width on mobile, inline on sm */}
@@ -151,7 +205,7 @@ export default function MatchesPage() {
                       <StatusBadge status={match.status} />
                     </div>
                     <div className="text-[11px] text-[color:var(--muted)] truncate">
-                      {match.league} · {match.date}{match.time ? ` · ${match.time}` : ''}
+                      {match.league.name} · {match.date}{match.time ? ` · ${match.time}` : ''}
                     </div>
                     {/* Stadium on its own line on very small screens */}
                     {match.stadium && (
@@ -167,17 +221,21 @@ export default function MatchesPage() {
                       <Icon name="share" size={13} />
                     </button>
                     {can.manageLineups && (
-                      <Link href={`/matches/${match.id}/lineup`}
+                      <Link href={`/matches/${match.slug}/lineup`} title="Lineup" 
                         className="w-7 h-7 grid place-items-center rounded-lg no-underline bg-[color:var(--surface2)] text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface3)] transition-colors sm:w-8 sm:h-8">
-                        <Icon name="lineup" size={13} />
+                        <img src={'/lineup.png'} alt='lineup' height={20} width={20} color='white'/>
                       </Link>
                     )}
                     {can.editMatch && (
-                      <Link href={`/matches/${match.id}/edit`}
+                      <Link href={`/matches/${match.slug}/edit`} title="Edit match"
                         className="w-7 h-7 grid place-items-center rounded-lg no-underline bg-[color:var(--surface2)] text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface3)] transition-colors sm:w-8 sm:h-8">
                         <Icon name="edit" size={13} />
                       </Link>
                     )}
+                     <Link href={`/matches/${match.slug}/analytics`} title="Match Analytics"
+                        className="w-7 h-7 grid place-items-center rounded-lg no-underline bg-[color:var(--surface2)] text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface3)] transition-colors sm:w-8 sm:h-8">
+                        <Icon name="analytics" size={13} />
+                      </Link>
                   </div>
                 </div>
               ))}
@@ -216,6 +274,86 @@ export default function MatchesPage() {
           </>
         )}
       </div>
+
+      {sharedOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 backdrop-blur-sm" onClick={() => setSharedOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md mx-4 rounded-xl broadcast-card overflow-hidden max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)] shrink-0">
+              <div className="text-[15px] font-semibold text-[color:var(--text)]">Shared lineups</div>
+              <button onClick={() => setSharedOpen(false)} className="w-7 h-7 rounded-md grid place-items-center text-[color:var(--muted)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex flex-col gap-2.5">
+              {sharedLoading ? (
+                <div className="text-[13px] text-[color:var(--muted)] text-center py-6">Loading…</div>
+              ) : sharedLineups.length === 0 ? (
+                <div className="text-[13px] text-[color:var(--muted)] text-center py-6">
+                  No lineups have been shared with you yet.
+                </div>
+              ) : (
+                sharedLineups.map(share => {
+                  const targets = eligibleTargetsFor(share);
+                  const isChoosing = importingId === null && targets.length > 0;
+                  return (
+                    <div key={share.id} className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface2)] p-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-[13px] font-medium text-[color:var(--text)]">
+                            {share.club?.name ?? 'A lineup'}
+                          </div>
+                          <div className="text-[11px] text-[color:var(--muted)] mt-0.5">
+                            Shared by {share.sender?.name ?? 'a broadcaster'}
+                            {share.match && ` · from ${share.match.homeTeam?.name ?? '—'} vs ${share.match.awayTeam?.name ?? '—'}`}
+                          </div>
+                          {share.status === 'imported' && (
+                            <span className="inline-block mt-1.5 text-[10px] font-semibold uppercase tracking-[.04em] text-green-400">Imported</span>
+                          )}
+                        </div>
+                        <button onClick={() => handleDismissShare(share)} title="Dismiss"
+                          className="w-6 h-6 shrink-0 rounded-md grid place-items-center text-[color:var(--faint)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
+                          <Icon name="close" size={12} />
+                        </button>
+                      </div>
+
+                      {share.status !== 'imported' && (
+                        targets.length === 0 ? (
+                          <p className="text-[11px] text-[color:var(--faint)] mt-2.5">
+                            You don't have any matches involving {share.club?.name ?? 'this club'} to import into yet.
+                          </p>
+                        ) : (
+                          <div className="mt-2.5 flex items-center gap-2">
+                            <select
+                              value={importingId === share.id ? importTarget : ''}
+                              onChange={(e) => { setImportingId(share.id); setImportTarget(e.target.value); }}
+                              className="flex-1 h-8 px-2 rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] text-[12px] text-[color:var(--text)] outline-none"
+                            >
+                              <option value="">Choose a match…</option>
+                              {targets.map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.homeTeam?.name ?? '—'} vs {m.awayTeam?.name ?? '—'} · {m.date}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => handleImport(share)}
+                              disabled={importingId !== share.id || !importTarget}
+                              className="h-8 px-3 rounded-md border-none bg-[color:var(--green)] text-white text-[12px] font-semibold cursor-pointer disabled:opacity-40"
+                            >
+                              Import
+                            </button>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

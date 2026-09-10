@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/v1';
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000/v1';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth token
@@ -77,6 +77,7 @@ export interface UserData {
   name:    string;
   email:   string;
   phone?:  string;
+  quality: string;
   role:    string;          // legacy single-role string
   roles:   string[];        // Spatie getRoleNames()
   status:  string;
@@ -87,22 +88,25 @@ export interface UserData {
 /** MatchFormatterService::format() */
 export interface MatchData {
   id:         string;
-  league:     string;          // league.leaguename or league.name
-  date:       string;          // Y-m-d
+  slug:       string| null;
+  league:{
+    id:     string;
+    name:   string;
+  };    
+  match_date?: string;   
+  date:       string;           // Y-m-d
   time:       string;          // H:i
   stadium:    string;          // venue field
-  status:     'scheduled' | 'live' | 'finished' | 'cancelled';
-  viewers:    number;
+  status:     'scheduled' | 'live' | 'completed' | 'cancelled';
+  views:    number;
   camera:     number;
+  type:       string;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string | null;  // soft-delete timestamp
   author: {
     id:     string;
     name:   string;
-    email:  string;
-    phone:  string;
-    camera: number;
   };
   referee: {
     id:    string;
@@ -111,14 +115,15 @@ export interface MatchData {
   };
   homeTeam: TeamData;
   awayTeam: TeamData;
+  home_club: TeamData;
+  away_club: TeamData;
 }
 
 export interface TeamData {
   id:              string;  // club uuid
   name:            string;
   formation:       string;
-  urlA?:           string;  // homeTeam logo_url
-  urlB?:           string;  // awayTeam logo_url
+  url?:           string;  // homeTeam logo_url
   color?:          string | null;
   goals:           number;  // home_score / away_score cast to int
   startingPlayers: PlayerData[];
@@ -154,6 +159,7 @@ export interface ClubPlayer {
   nationality?:   string;
   market_value?:  number;
   club_id:        string;
+  role:           string;
 }
 
 export interface Referee {
@@ -164,8 +170,7 @@ export interface Referee {
 
 export interface League {
   id:          string;
-  name?:       string;
-  leaguename?: string;      // primary field
+  name?:       string;   // primary field
   type?:       string;
 }
 
@@ -175,10 +180,12 @@ export interface PlanData {
   name:               string;
   slug:               string;
   description:        string | null;
-  price_kes:          number;
+  currency:           string | null;
+  price:              number;
   duration_days:      number;
   max_matches:        number | null;
-  max_streams:        number | null;
+  max_cameras:        number | null;
+  quality:            number[];
   ads_enabled:        boolean;
   analytics_enabled:  boolean;
   is_active:          boolean;
@@ -213,13 +220,17 @@ export interface AdvertisementData {
   duration:      number;
   period:        string | null;
   end_date:      string | null;
-  status:        'active' | 'paused' | 'expired' | 'pending';
+  status:        'active' | 'paused' | 'expired' | 'pending' | 'payment_failed';
   target_tags:   string[] | null;
   user_id?:      string;
   alt_text?:     string | null;
   events_count?: number;
   created_at?:   string;
   deleted_at?:   string | null;  // soft-delete timestamp
+  payment_id?:   string | null;
+  price?:        number | null;
+  campaign_type?: 'general' | 'bid';
+  broadcaster_id?: string | null;
 }
 
 /** AdvertisementAnalyticsService::summary() */
@@ -232,25 +243,25 @@ export interface AdAnalyticsData {
   title?:             string;
   total_events?:      number;
   total_play_time?:   number;
-  avg_viewers?:       number;
+  avg_views?:       number;
   by_period?:         Record<string, number>;
   by_platform?:       Record<string, number>;
 }
 
 /** AdPayment model */
-export interface AdPaymentData {
+export interface PaymentData {
   id:               string;
-  advertisement_id: string;
   user_id:          string;
-  amount_kes:       number;
+  amount:           number;
   currency:         string;
   payment_method:   'mpesa' | 'card' | 'bank_transfer';
-  mpesa_reference:  string | null;
+  reference:        string | null;
   transaction_code: string | null;
   status:           'pending' | 'completed' | 'failed' | 'refunded';
+  type:             'subscription' | 'advertisement';
   paid_at:          string | null;
   notes:            string | null;
-  metadata:         Record<string, unknown> | null;
+  phone:            string;         
 }
 
 /** Admin paginated user */
@@ -278,7 +289,7 @@ export interface AdminDashboardData {
     by_plan: { plan: string; active: number }[];
   };
   revenue: {
-    total_kes: number; today_kes: number; month_kes: number; transactions: number;
+    total: number; today: number; month: number; transactions: number; currency:number;
   };
   system: {
     audit_logs_today: number; failed_jobs: number;
@@ -292,20 +303,21 @@ export interface AdminDashboardData {
 
 /** AdminAdvertisementService::revenueBreakdown() */
 export interface AdminRevenueData {
-  total_kes:       number;
-  today_kes:       number;
-  month_kes:       number; // ← added to match UI (aligns with `this_month_kes` from backend)
+  total:           number;
+  today:           number;
+  month:           number; // ← added to match UI (aligns with `this_month_kes` from backend)
+  currency:        string;
   transactions:    number; // ← added (used in the Revenue summary table)
   by_method:       { payment_method: string; total: number; count: number }[];
   pending_total:   number;
   pending_count:   number;
-  sparkline:       { date: string; total_kes: number }[]; // ← added for the 14-day trend chart
+  sparkline:       { date: string; total: number; currency: string}[]; // ← added for the 14-day trend chart
 }
 
 /** AdminSystemController::health() */
 export interface SystemHealthData {
-  app:      Record<string, string | number | boolean>;
-  database: Record<string, string | number | boolean>;
+  app:      Record<string, string | number | boolean| any>;
+  database: Record<string, string | number | boolean| any>;
   cache:    { status: string; driver: string; error?: string };
   queue:    { driver: string; pending: number; failed: number; after_commit: boolean | null };
 }
@@ -339,8 +351,9 @@ export interface AuditLogRow {
 /** Revenue over time row */
 export interface RevenueRow {
   date:         string;
-  total_kes:    number;
+  total:        number;
   transactions: number;
+  currency:     string;
 }
 
 /** User growth row */
@@ -349,6 +362,180 @@ export interface UserGrowthRow {
   new_users: number;
 }
 
+export interface MatchPayload {
+  // Club & league
+  home_club_id?:    string;
+  away_club_id?:    string;
+  league_id?:       string;
+  leagueid?:        string;       // alias used by create form
+  // Author
+  authorid?:        string;
+  author_id?:       string;
+  // Referee
+  referee_id?:      string;
+  referee?:         string;       // alias used by create form
+  // Scheduling
+  date?:            string;       // Y-m-d
+  time?:            string;       // H:i
+  match_date?:      string;       // ISO datetime alias used by create form
+  venue?:           string;
+  // Score
+  home_score?:      number;
+  away_score?:      number;
+  // Meta
+  status?:          MatchData['status'];
+  camera?:          number;
+  home_formation?:  string;
+  away_formation?:  string;
+  // Extra pass-through
+  [key: string]:    unknown;
+}
+
+export interface UpdateMatchPayload {
+  status?:     MatchData['status'];
+  venue?:      string;
+  date?:       string;
+  time?:       string;
+  home_score?: number;
+  away_score?: number;
+  camera?:     number;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NEW TYPES — append after existing AdAnalyticsData interface in lib/api.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Enriched per-ad analytics from AdvertisementAnalyticsService::summary() */
+export interface RichAdAnalyticsData {
+  impressions:          number;
+  plays:                number;
+  completed:            number;
+  play_rate_pct:        number;
+  completion_rate_pct:  number;
+  total_play_time:      number;
+  avg_play_time:        number;
+  avg_viewers:          number;
+  peak_viewers:         number;
+  by_period:            Record<string, number>;
+  by_platform:          Record<string, number>;
+  impressions_per_day:  { date: string; count: number }[];
+  by_match:             Record<string, number>;
+}
+
+/** Per-match analytics returned by MatchAnalyticsService::forMatch() */
+export interface MatchAnalyticsData {
+  overview: {
+    match_id:        string;
+    status:          string;
+    home_club:       string;
+    away_club:       string;
+    league:          string;
+    match_date:      string;
+    home_score:      number;
+    away_score:      number;
+    total_views:     number;
+    unique_views:  number;
+    anonymous_views: number;
+    total_ad_events: number;
+    ad_impressions:  number;
+  };
+  views: {
+    peak_views:          number;
+    views_first_half:    number;
+    views_second_half:   number;
+    views_extra_time:    number;
+  };
+  timeline:    { minute: number; views: number }[];
+  ads: {
+    impressions:           number;
+    plays:                 number;
+    completed:             number;
+    play_rate_pct:         number;
+    completion_rate_pct:   number;
+    total_play_time_secs:  number;
+    by_period:             { period: string; event_type: string; count: number }[];
+    by_platform:           Record<string, number>;
+  };
+  ad_timeline:  { minute: number; impressions: number }[];
+  engagement:   { segment: string; views: number }[];
+  peak_minutes: { minute: number; views: number }[];
+  device_split: {
+    devices:  Record<string, number>;
+    browsers: Record<string, number>;
+  };
+}
+
+/** Admin: match analytics overview */
+export interface AdminMatchAnalyticsData {
+  per_day:      { date: string; count: number }[];
+  by_status:    Record<string, number>;
+  by_league:    { league: string; count: number }[];
+  viewer_stats: { total_viewers: number; avg_viewers: number; peak_viewers: number };
+  by_hour:      { hour: number; count: number }[];
+  top_matches:  { id: string; viewer_count: number; match_date: string; status: string }[];
+  live_now:     number;
+  total_period: number;
+}
+
+/** Admin: global ad performance */
+export interface AdminAdPerformanceData {
+  funnel:               Record<string, number>;
+  by_platform:          { platform: string; event_type: string; count: number }[];
+  impressions_per_day:  { date: string; count: number }[];
+  by_period:            { period: string; count: number }[];
+  top_ads: {
+    id: string; title: string; file_type: string; status: string;
+    impressions_count: number; plays_count: number; completions_count: number;
+  }[];
+  avg_play_time_secs:    number;
+  total_viewer_minutes:  number;
+}
+
+/** Admin: device / user-agent analytics */
+export interface AdminDeviceAnalyticsData {
+  devices:             Record<string, number>;
+  browsers:            Record<string, number>;
+  oses:                Record<string, number>;
+  top_ips:             { ip_address: string; requests: number }[];
+  hourly_heatmap:      { hour: number; count: number }[];
+  errors_by_day:       { date: string; errors: number }[];
+  unique_users_by_day: { date: string; unique_users: number }[];
+  total_requests:      number;
+}
+
+/** Admin: log / request analytics */
+export interface AdminLogAnalyticsData {
+  by_module:               { module: string; count: number }[];
+  top_actions:             { action: string; count: number }[];
+  status_codes:            Record<string, number>;
+  avg_response_by_module:  { module: string; avg_ms: number; max_ms: number }[];
+  slow_requests: {
+    id: string; action: string; module: string | null;
+    description: string | null; ip_address: string | null;
+    created_at: string; metadata: Record<string, unknown>;
+  }[];
+  by_dow:  { day: string; count: number }[];
+  per_day: { date: string; total: number; server_errors: number; client_errors: number }[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lineups
+// GET /lineups/by-match/{match} → data = Lineup[] (raw model with player+club eager)
+// POST /lineups → data = Lineup[]
+// ─────────────────────────────────────────────────────────────────────────────
+export interface LineupRow {
+  id:         string;
+  match_id:   string;
+  player_id:  string;
+  club_id:    string;
+  position:   string;
+  is_starter: boolean;
+  minute_in?: number | null;
+  minute_out?: number | null;
+  player?: ClubPlayer;
+  club?:   Club;
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // UserPrefs — persists user + token in localStorage
 // ─────────────────────────────────────────────────────────────────────────────
@@ -535,7 +722,7 @@ if (data.role) {
 }
 
 export async function registerUser(payload: {
-  name: string; email: string; phone: string; password: string; role: string;
+  name: string; email: string; phone: string; password: string; role: string; game_type: string;
 }): Promise<UserData> {
   const { data, meta } = await apiFetch<UserData>('/auth/register', {
     method: 'POST', body: JSON.stringify(payload),
@@ -596,45 +783,6 @@ export async function getUpcomingMatches(): Promise<MatchData[]> {
 export async function getCompletedMatches(): Promise<MatchData[]> {
   const { data } = await apiFetch<Record<string, MatchData>>('/matches/completed');
   return Object.values(data ?? {});
-}
-
-export interface MatchPayload {
-  // Club & league
-  home_club_id?:    string;
-  away_club_id?:    string;
-  league_id?:       string;
-  leagueid?:        string;       // alias used by create form
-  // Author
-  authorid?:        string;
-  author_id?:       string;
-  // Referee
-  referee_id?:      string;
-  referee?:         string;       // alias used by create form
-  // Scheduling
-  date?:            string;       // Y-m-d
-  time?:            string;       // H:i
-  match_date?:      string;       // ISO datetime alias used by create form
-  venue?:           string;
-  // Score
-  home_score?:      number;
-  away_score?:      number;
-  // Meta
-  status?:          MatchData['status'];
-  camera?:          number;
-  home_formation?:  string;
-  away_formation?:  string;
-  // Extra pass-through
-  [key: string]:    unknown;
-}
-
-export interface UpdateMatchPayload {
-  status?:     MatchData['status'];
-  venue?:      string;
-  date?:       string;
-  time?:       string;
-  home_score?: number;
-  away_score?: number;
-  camera?:     number;
 }
 
 export async function addMatch(payload: MatchPayload | Record<string, unknown>): Promise<MatchData> {
@@ -744,23 +892,7 @@ export async function addReferee(payload: unknown): Promise<Referee> {
   return data;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Lineups
-// GET /lineups/by-match/{match} → data = Lineup[] (raw model with player+club eager)
-// POST /lineups → data = Lineup[]
-// ─────────────────────────────────────────────────────────────────────────────
-export interface LineupRow {
-  id:         string;
-  match_id:   string;
-  player_id:  string;
-  club_id:    string;
-  position:   string;
-  is_starter: boolean;
-  minute_in?: number | null;
-  minute_out?: number | null;
-  player?: ClubPlayer;
-  club?:   Club;
-}
+
 
 export async function getLineupsByMatch(matchId: string): Promise<LineupRow[]> {
   const { data } = await apiFetch<LineupRow[]>(`/lineups/by-match/${matchId}`);
@@ -796,9 +928,9 @@ export async function getPlan(planId: string): Promise<PlanData> {
   return data;
 }
 
-export async function subscribeToPlan(planId: string, paymentId?: string): Promise<SubscriptionData> {
+export async function subscribeToPlan(planId: string, quality: number,paymentDetails:any,method: string): Promise<SubscriptionData> {
   const { data } = await apiFetch<SubscriptionData>(`/plans/${planId}/subscribe`, {
-    method: 'POST', body: JSON.stringify({ payment_id: paymentId ?? null }),
+    method: 'POST', body: JSON.stringify({ plan_id:planId, quality:quality,details:paymentDetails,method:method}),
   }, true);
   return data;
 }
@@ -877,38 +1009,69 @@ export async function getAdvertisementForStream(params?: {
 // GET /ads/{advertisement}/payments → data = AdPaymentData[]
 // GET /ads/payments/my → data = AdPaymentData[]
 // ─────────────────────────────────────────────────────────────────────────────
-export async function initiateAdPayment(
+export async function initiatePayment(
   advertisementId: string,
-  payload: { amount_kes: number; payment_method?: string; mpesa_reference?: string },
-): Promise<AdPaymentData> {
-  const { data } = await apiFetch<AdPaymentData>(`/ads/${advertisementId}/payments`, {
+  payload: { amount: number; payment_method?: string; mpesa_reference?: string; currency:string},
+): Promise<PaymentData> {
+  const { data } = await apiFetch<PaymentData>(`/payments`, {
     method: 'POST', body: JSON.stringify(payload),
   }, true);
   return data;
 }
 
-export async function confirmAdPayment(paymentId: string, transactionCode: string): Promise<AdPaymentData> {
-  const { data } = await apiFetch<AdPaymentData>(`/ads/payments/${paymentId}/confirm`, {
+export async function confirmAdPayment(paymentId: string, transactionCode: string): Promise<PaymentData> {
+  const { data } = await apiFetch<PaymentData>(`/payments/${paymentId}/confirm`, {
     method: 'POST', body: JSON.stringify({ transaction_code: transactionCode }),
   }, true);
   return data;
 }
 
-export async function failAdPayment(paymentId: string, reason?: string): Promise<AdPaymentData> {
-  const { data } = await apiFetch<AdPaymentData>(`/ads/payments/${paymentId}/fail`, {
+export async function failAdPayment(paymentId: string, reason?: string): Promise<PaymentData> {
+  const { data } = await apiFetch<PaymentData>(`/payments/${paymentId}/fail`, {
     method: 'POST', body: JSON.stringify({ reason: reason ?? '' }),
   }, true);
   return data;
 }
 
-export async function getAdPayments(advertisementId: string): Promise<AdPaymentData[]> {
-  const { data } = await apiFetch<AdPaymentData[]>(`/ads/${advertisementId}/payments`, {}, true);
+export async function getPayments(type: string): Promise<PaymentData[]> {
+  const { data } = await apiFetch<PaymentData[]>(`/${type}/payments`, {}, true);
   return Array.isArray(data) ? data : [];
 }
 
-export async function getMyAdPayments(): Promise<AdPaymentData[]> {
-  const { data } = await apiFetch<AdPaymentData[]>('/ads/payments/my', {}, true);
-  return Array.isArray(data) ? data : [];
+/** Poll GET /payments/{id}/status — mirrors "latest transaction status" on the backend. */
+export async function getPaymentStatus(paymentId: string): Promise<PaymentData> {
+  const { data } = await apiFetch<PaymentData>(`/payments/${paymentId}/status`, {}, true);
+  return data;
+}
+
+/**
+ * Poll a payment until it reaches a terminal status (completed/failed) or
+ * the timeout elapses. Used instead of a fake fixed delay so the UI
+ * reflects what the M-Pesa callback actually confirmed.
+ */
+export async function pollPaymentUntilSettled(
+  paymentId: string,
+  { intervalMs = 2500, timeoutMs = 60000 }: { intervalMs?: number; timeoutMs?: number } = {},
+): Promise<PaymentData> {
+  const deadline = Date.now() + timeoutMs;
+  let last: PaymentData | null = null;
+
+  while (Date.now() < deadline) {
+    last = await getPaymentStatus(paymentId);
+    if (last.status === 'completed' || last.status === 'failed' || last.status === 'refunded') {
+      return last;
+    }
+    await new Promise(r => setTimeout(r, intervalMs));
+  }
+
+  if (last) return last;
+  throw new Error('Payment is taking longer than expected. Check your phone for the M-Pesa prompt.');
+}
+
+export async function getMyPayments(): Promise<PaymentData[]> {
+  const response = await apiFetch<PaymentData[]>('/payments/my', {}, true);
+  console.log("MY",response.data);
+  return Array.isArray(response.data) ? response.data : [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1083,9 +1246,9 @@ export async function adminGetAdAnalytics(adId: string): Promise<AdAnalyticsData
 }
 
 // Payments (admin)
-export async function adminGetPayments(params?: Record<string, string>): Promise<Paginated<AdPaymentData>> {
+export async function adminGetPayments(params?: Record<string, string>): Promise<Paginated<PaymentData>> {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-  const { data, meta } = await apiFetch<AdPaymentData[]>(`${A}/payments${qs}`, {}, true);
+  const { data, meta } = await apiFetch<PaymentData[]>(`${A}/payments${qs}`, {}, true);
   return { data: Array.isArray(data) ? data : [], meta: meta as Paginated<unknown>['meta'] };
 }
 
@@ -1094,15 +1257,15 @@ export async function adminGetRevenueSummary(): Promise<AdminRevenueData> {
   return data;
 }
 
-export async function adminConfirmPayment(paymentId: string, transactionCode: string): Promise<AdPaymentData> {
-  const { data } = await apiFetch<AdPaymentData>(`${A}/payments/${paymentId}/confirm`, {
+export async function adminConfirmPayment(paymentId: string, transactionCode: string): Promise<PaymentData> {
+  const { data } = await apiFetch<PaymentData>(`${A}/payments/${paymentId}/confirm`, {
     method: 'POST', body: JSON.stringify({ transaction_code: transactionCode }),
   }, true);
   return data;
 }
 
-export async function adminRefundPayment(paymentId: string): Promise<AdPaymentData> {
-  const { data } = await apiFetch<AdPaymentData>(`${A}/payments/${paymentId}/refund`, { method: 'POST' }, true);
+export async function adminRefundPayment(paymentId: string): Promise<PaymentData> {
+  const { data } = await apiFetch<PaymentData>(`${A}/payments/${paymentId}/refund`, { method: 'POST' }, true);
   return data;
 }
 
@@ -1200,6 +1363,187 @@ export async function adminForceDeletePlan(planId: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Share Lineup
+// POST /share-lineups → data = ShareLineupData
+// GET  /share-lineups → data = ShareLineupData[] (shared with me)
+// GET  /share-lineups/sent → data = ShareLineupData[] (shared by me)
+// GET  /share-lineups/{id}/preview → data = LineupRow[]
+// POST /share-lineups/{id}/import → data = LineupRow[]
+// DELETE /share-lineups/{id} → data = null
+// GET  /broadcasters/search?q= → data = BroadcasterOption[]
+// ─────────────────────────────────────────────────────────────────────────────
+export interface BroadcasterOption {
+  id:    string;
+  name:  string;
+  email: string;
+}
+
+export interface ShareLineupData {
+  id:                      string;
+  club_id:                 string;
+  match_id:                string;
+  sender_id:               string;
+  recepient_id:            string;
+  status:                  'pending' | 'imported';
+  imported_at:             string | null;
+  imported_into_match_id:  string | null;
+  created_at?:             string;
+  sender?:    Pick<UserData, 'id' | 'name' | 'email'>;
+  recepient?: Pick<UserData, 'id' | 'name' | 'email'>;
+  club?:      Club;
+  match?:     MatchData;
+}
+
+export async function searchBroadcasters(q: string): Promise<BroadcasterOption[]> {
+  const { data } = await apiFetch<BroadcasterOption[]>(`/broadcasters/search?q=${encodeURIComponent(q)}`, {}, true);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function shareLineup(matchId: string, clubId: string, recepientId: string): Promise<ShareLineupData> {
+  const { data } = await apiFetch<ShareLineupData>('/share-lineups', {
+    method: 'POST', body: JSON.stringify({ match_id: matchId, club_id: clubId, recepient_id: recepientId }),
+  }, true);
+  return data;
+}
+
+/** Lineups shared with me — backs the "Shared lineup" page on the matches page. */
+export async function getReceivedSharedLineups(): Promise<ShareLineupData[]> {
+  const { data } = await apiFetch<ShareLineupData[]>('/share-lineups', {}, true);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getSentSharedLineups(): Promise<ShareLineupData[]> {
+  const { data } = await apiFetch<ShareLineupData[]>('/share-lineups/sent', {}, true);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function previewSharedLineup(shareId: string): Promise<LineupRow[]> {
+  const { data } = await apiFetch<LineupRow[]>(`/share-lineups/${shareId}/preview`, {}, true);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function importSharedLineup(shareId: string, targetMatchId: string): Promise<LineupRow[]> {
+  const { data } = await apiFetch<LineupRow[]>(`/share-lineups/${shareId}/import`, {
+    method: 'POST', body: JSON.stringify({ match_id: targetMatchId }),
+  }, true);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function deleteSharedLineup(shareId: string): Promise<void> {
+  await apiFetch(`/share-lineups/${shareId}`, { method: 'DELETE' }, true);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Match Bids (bid tab)
+// GET  /match-bids/matches → data = MatchData[] (ranked by traction, filterable)
+// GET  /match-bids/base-price?period= → data = { period, base_price }
+// POST /match-bids → data = { advertisement: AdvertisementData, payment_id, total }
+// GET  /match-bids/my → data = MatchBidData[]
+// ─────────────────────────────────────────────────────────────────────────────
+export type BidPeriod = 'before_match' | 'halftime' | 'fulltime';
+
+export interface MatchBidData {
+  id:                string;
+  match_id:          string;
+  advertisement_id:  string;
+  user_id:           string;
+  payment_id:        string | null;
+  period:            BidPeriod;
+  slot_rank:         number | null;
+  amount:            number;
+  currency:          string;
+  status:            'pending_payment' | 'pending' | 'won' | 'lost' | 'refunded';
+  created_at?:       string;
+  match?: MatchData;
+  ad?:    AdvertisementData;
+}
+
+export interface BidEntry {
+  match_id: string;
+  period:   BidPeriod;
+  amount:   number;
+}
+
+export async function getBidEligibleMatches(filters?: {
+  date?: string; stadium?: string; club_id?: string;
+}): Promise<MatchData[]> {
+  const qs = filters ? '?' + new URLSearchParams(
+    Object.fromEntries(Object.entries(filters).filter(([, v]) => !!v)) as Record<string, string>
+  ).toString() : '';
+  const { data } = await apiFetch<MatchData[]>(`/match-bids/matches${qs}`, {}, true);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getBidBasePrice(period: BidPeriod): Promise<number> {
+  const { data } = await apiFetch<{ period: string; base_price: number }>(`/match-bids/base-price?period=${period}`, {}, true);
+  return data.base_price;
+}
+
+export async function createBidCampaign(payload: {
+  title: string; file: File; bids: BidEntry[]; details: { phone: string };
+  target_tags?: string[]; self_advertise?: boolean; currency?: string;
+}): Promise<{ advertisement: AdvertisementData; payment_id: string; total: number }> {
+  const form = new FormData();
+  form.append('title', payload.title);
+  form.append('file_type', 'image');
+  form.append('file', payload.file);
+  form.append('currency', payload.currency ?? 'KES');
+  form.append('method', 'mpesa');
+  form.append('details[phone]', payload.details.phone);
+  if (payload.self_advertise) form.append('self_advertise', '1');
+  payload.bids.forEach((b, i) => {
+    form.append(`bids[${i}][match_id]`, b.match_id);
+    form.append(`bids[${i}][period]`, b.period);
+    form.append(`bids[${i}][amount]`, String(b.amount));
+  });
+  const { data } = await apiFetch<{ advertisement: AdvertisementData; payment_id: string; total: number }>('/match-bids', {
+    method: 'POST', body: form,
+  }, true);
+  return data;
+}
+
+export async function getMyBids(): Promise<MatchBidData[]> {
+  const { data } = await apiFetch<MatchBidData[]>('/match-bids/my', {}, true);
+  return Array.isArray(data) ? data : [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Broadcaster Revenue tab
+// GET /revenue → data = { enabled, total_gross, total_earned, matches: MatchRevenueRow[] }
+// GET /revenue/matches/{match} → data = MatchRevenueRow[]
+// ─────────────────────────────────────────────────────────────────────────────
+export interface MatchRevenueRow {
+  id:                  string;
+  match_id:            string;
+  broadcaster_id:      string | null;
+  period:              BidPeriod;
+  gross_amount:        number;
+  broadcaster_amount:  number;
+  platform_amount:     number;
+  share_percent:       number;
+  currency:            string;
+  created_at?:         string;
+  match?: MatchData;
+}
+
+export interface RevenueSummary {
+  enabled:       boolean;
+  total_gross:   number;
+  total_earned:  number;
+  matches:       MatchRevenueRow[];
+}
+
+export async function getRevenueSummary(): Promise<RevenueSummary> {
+  const { data } = await apiFetch<RevenueSummary>('/revenue', {}, true);
+  return data;
+}
+
+export async function getMatchRevenue(matchId: string): Promise<MatchRevenueRow[]> {
+  const { data } = await apiFetch<MatchRevenueRow[]>(`/revenue/matches/${matchId}`, {}, true);
+  return Array.isArray(data) ? data : [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────────────────────────────────────
 if (typeof window !== 'undefined') {
@@ -1207,122 +1551,7 @@ if (typeof window !== 'undefined') {
   if (stored) setAuthToken(stored);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// NEW TYPES — append after existing AdAnalyticsData interface in lib/api.ts
-// ─────────────────────────────────────────────────────────────────────────────
 
-/** Enriched per-ad analytics from AdvertisementAnalyticsService::summary() */
-export interface RichAdAnalyticsData {
-  impressions:          number;
-  plays:                number;
-  completed:            number;
-  play_rate_pct:        number;
-  completion_rate_pct:  number;
-  total_play_time:      number;
-  avg_play_time:        number;
-  avg_viewers:          number;
-  peak_viewers:         number;
-  by_period:            Record<string, number>;
-  by_platform:          Record<string, number>;
-  impressions_per_day:  { date: string; count: number }[];
-  by_match:             Record<string, number>;
-}
-
-/** Per-match analytics returned by MatchAnalyticsService::forMatch() */
-export interface MatchAnalyticsData {
-  overview: {
-    match_id:        string;
-    status:          string;
-    home_club:       string;
-    away_club:       string;
-    league:          string;
-    match_date:      string;
-    home_score:      number;
-    away_score:      number;
-    total_views:     number;
-    unique_viewers:  number;
-    anonymous_views: number;
-    total_ad_events: number;
-    ad_impressions:  number;
-  };
-  viewers: {
-    peak_viewers:          number;
-    viewers_first_half:    number;
-    viewers_second_half:   number;
-    viewers_extra_time:    number;
-  };
-  timeline:    { minute: number; viewers: number }[];
-  ads: {
-    impressions:           number;
-    plays:                 number;
-    completed:             number;
-    play_rate_pct:         number;
-    completion_rate_pct:   number;
-    total_play_time_secs:  number;
-    by_period:             { period: string; event_type: string; count: number }[];
-    by_platform:           Record<string, number>;
-  };
-  ad_timeline:  { minute: number; impressions: number }[];
-  engagement:   { segment: string; viewers: number }[];
-  peak_minutes: { minute: number; viewers: number }[];
-  device_split: {
-    devices:  Record<string, number>;
-    browsers: Record<string, number>;
-  };
-}
-
-/** Admin: match analytics overview */
-export interface AdminMatchAnalyticsData {
-  per_day:      { date: string; count: number }[];
-  by_status:    Record<string, number>;
-  by_league:    { league: string; count: number }[];
-  viewer_stats: { total_viewers: number; avg_viewers: number; peak_viewers: number };
-  by_hour:      { hour: number; count: number }[];
-  top_matches:  { id: string; viewer_count: number; match_date: string; status: string }[];
-  live_now:     number;
-  total_period: number;
-}
-
-/** Admin: global ad performance */
-export interface AdminAdPerformanceData {
-  funnel:               Record<string, number>;
-  by_platform:          { platform: string; event_type: string; count: number }[];
-  impressions_per_day:  { date: string; count: number }[];
-  by_period:            { period: string; count: number }[];
-  top_ads: {
-    id: string; title: string; file_type: string; status: string;
-    impressions_count: number; plays_count: number; completions_count: number;
-  }[];
-  avg_play_time_secs:    number;
-  total_viewer_minutes:  number;
-}
-
-/** Admin: device / user-agent analytics */
-export interface AdminDeviceAnalyticsData {
-  devices:             Record<string, number>;
-  browsers:            Record<string, number>;
-  oses:                Record<string, number>;
-  top_ips:             { ip_address: string; requests: number }[];
-  hourly_heatmap:      { hour: number; count: number }[];
-  errors_by_day:       { date: string; errors: number }[];
-  unique_users_by_day: { date: string; unique_users: number }[];
-  total_requests:      number;
-}
-
-/** Admin: log / request analytics */
-export interface AdminLogAnalyticsData {
-  by_module:               { module: string; count: number }[];
-  top_actions:             { action: string; count: number }[];
-  status_codes:            Record<string, number>;
-  avg_response_by_module:  { module: string; avg_ms: number; max_ms: number }[];
-  slow_requests: {
-    id: string; action: string; module: string | null;
-    description: string | null; ip_address: string | null;
-    created_at: string; metadata: Record<string, unknown>;
-  }[];
-  by_dow:  { day: string; count: number }[];
-  per_day: { date: string; total: number; server_errors: number; client_errors: number }[];
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NEW API FUNCTIONS — append after adminGetRevenueSummary() in lib/api.ts

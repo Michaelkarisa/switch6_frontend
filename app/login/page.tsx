@@ -78,7 +78,7 @@ export default function LoginPage() {
       <div className="login-mobile-bar hidden items-center justify-between px-4 py-[10px] border-b border-[var(--border)] bg-[var(--topbar-bg)] backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center gap-[10px]">
           <span className="grid place-items-center rounded-[10px] w-8 h-8 shrink-0 bg-gradient-to-br from-blue-500 to-green-500">
-            <Radio size={15} color="#fff" strokeWidth={2} />
+            <img src={'/ic_launcher.png'} alt=''/>
           </span>
           <div>
             <div className="font-semibold text-sm text-[var(--text)] leading-tight">Switch6</div>
@@ -97,7 +97,7 @@ export default function LoginPage() {
 
             <Link href="/" className="login-logo-desktop hidden items-center gap-3 mb-12 no-underline w-fit">
               <span className="grid place-items-center rounded-xl w-10 h-10 shrink-0 bg-gradient-to-br from-blue-500 to-green-500">
-                <Radio size={19} color="#fff" strokeWidth={2} />
+                <img src={'/ic_launcher.png'} alt=''/>
               </span>
               <span>
                 <strong className="block text-[17px] font-semibold text-[var(--text)] tracking-tight">Switch6</strong>
@@ -116,7 +116,7 @@ export default function LoginPage() {
                 Control room<span className="text-[var(--green)]">.</span>
               </h1>
               <p className="text-sm text-[var(--muted)] leading-relaxed">
-                Sign in to access your workspace. Admins, broadcasters and advertisers each land in their own panel.
+                Sign in to access your workspace. Broadcasters and advertisers each land in their own panel.
               </p>
             </div>
 
@@ -207,7 +207,7 @@ export default function LoginPage() {
               <span className="bg-gradient-to-r from-green-500 to-blue-400 bg-clip-text text-transparent">broadcast-ready.</span>
             </h2>
             <p className="text-[15px] text-[var(--muted)] leading-[1.65] max-w-[440px]">
-              One platform, three roles. Broadcasters manage match ops. Advertisers run campaigns. Admins oversee the system.
+              One platform, two roles. Broadcasters manage match ops. Advertisers run campaigns.
             </p>
           </div>
           <div className="relative z-10 grid grid-cols-3 gap-3">

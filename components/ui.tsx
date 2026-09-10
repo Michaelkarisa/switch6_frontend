@@ -63,11 +63,16 @@ import {
   X,
   Volleyball,
   Lock,
-  Share
+  Share,
+  Pause,
+  Phone,
+  LucideCornerLeftUp,
+  ArrowDownWideNarrowIcon,
+  ArrowBigDownIcon
 } from 'lucide-react';
 import { useTheme } from '@/lib/ThemeContext';
 import { loadNotifications, onNotifications, markAllRead, markRead, clearAll, type AppNotification } from '@/lib/notifications';
-import { UserPrefs } from '@/lib/api';
+import { logoutUser, UserPrefs, BASE_URL } from '@/lib/api';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   dashboard: MonitorPlay,
@@ -131,12 +136,38 @@ const ICON_MAP: Record<string, LucideIcon> = {
   share: Share,
   close: X,
   privacy: Lock,
+  pause: Pause,
+  'arrow-down': ArrowDownToLine
 };
-export const Icon = memo(function Icon({ name, size = 20, className = '' }: { name: string; size?: number; className?: string }) {
-  console.log('Rendering icon:', name);
-  const C = ICON_MAP[name] ?? OctagonAlert;
-  return <C size={size} className={className} strokeWidth={1.8} />;
+const missingIcons = new Set<string>();
+
+export const Icon = memo(function Icon({
+  name,
+  size = 20,
+  className = '',
+}: {
+  name: string;
+  size?: number;
+  className?: string;
+}) {
+  const C = ICON_MAP[name];
+
+  if (!C && !missingIcons.has(name)) {
+    missingIcons.add(name);
+    console.warn(`Icon not found in ICON_MAP: "${name}"`);
+  }
+
+  const Component = C ?? OctagonAlert;
+
+  return (
+    <Component
+      size={size}
+      className={className}
+      strokeWidth={1.8}
+    />
+  );
 });
+
 Icon.displayName = 'Icon';
 
 // ─── Status Badge ─────────────────────────────────────────────
@@ -174,6 +205,7 @@ StatusBadge.displayName = 'StatusBadge';
 
 import { getUserRole, ROLES } from '@/lib/api';
 import { getRoleLabel, getRoleColor } from '@/lib/auth';
+import Image from 'next/image';
 
 // ─────────────────────────────────────────────────────────────
 // Role-scoped navigation items
@@ -185,7 +217,8 @@ const BROADCASTER_NAV: NavItem[] = [
   { icon: 'soccer',        label: 'Matches',          href: '/matches' },
   { icon: 'add-circle',    label: 'Create match',     href: '/matches/create' },
   { icon: 'advertisement', label: 'Advertise',        href: '/advertisement' },
-  { icon: 'payment',       label: 'Payment',          href: '/payment' },
+  { icon: 'chart',         label: 'Revenue',          href: '/revenue' },
+  { icon: 'payment',       label: 'Plans & Billing',  href: '/payment' },
   { icon: 'settings',      label: 'Settings',         href: '/settings' },
   { icon: 'terms',         label: 'Terms of service', href: '/terms' },
   { icon: 'privacy',       label: 'Privacy Policy',   href: '/privacy' },
@@ -193,7 +226,7 @@ const BROADCASTER_NAV: NavItem[] = [
 
 const ADVERTISER_NAV: NavItem[] = [
   { icon: 'advertisement', label: 'My Campaigns',     href: '/advertisement' },
-  { icon: 'payment',       label: 'Payments',         href: '/payment' },
+  { icon: 'payment',       label: 'Billing',         href: '/payment' },
   { icon: 'settings',      label: 'Settings',         href: '/settings' },
   { icon: 'terms',         label: 'Terms of service', href: '/terms' },
   { icon: 'privacy',       label: 'Privacy Policy',   href: '/privacy' },
@@ -233,17 +266,57 @@ function RoleBadge({ role }: { role: string | null }) {
 // ─────────────────────────────────────────────────────────────
 // Sidebar — role-aware
 // ─────────────────────────────────────────────────────────────
-export const Sidebar = memo(function Sidebar({ userName, onDownload, downloading, collapsed = false }: {
-  userName: string; onDownload: () => void; downloading: boolean; collapsed?: boolean;
-}) {
-  const pathname = usePathname();
-  const router   = useRouter();
-  const role     = getUserRole();
-  const navItems = navItemsForRole(role);
-  const initial  = userName?.[0]?.toUpperCase() || 'G';
-  const w        = collapsed ? 72 : 256;
 
-  const handleLogout = useCallback(() => { UserPrefs.clear(); router.push('/'); }, [router]);
+export const Sidebar = memo(function Sidebar({ 
+  userName, 
+  onDownload, 
+  downloadingArch, 
+  collapsed = false 
+}: {
+  userName: string; 
+  onDownload: (arch: 'arm64' | 'arm32') => void; 
+  downloadingArch: 'arm64' | 'arm32' | null; 
+  collapsed?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+  
+  const role = getUserRole();
+  const navItems = navItemsForRole(role);
+  const initial = userName?.[0]?.toUpperCase() || 'G';
+  const w = collapsed ? 72 : 256;
+
+  // Click-outside handler to close the dropdown
+  useEffect(() => {
+    if (!open) return;
+    
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  const handleLogout = useCallback(async() => { 
+    UserPrefs.clear(); 
+    router.push('/'); 
+    await logoutUser();
+  }, [router]);
+
+  // Improved active link check
+  const isActive = (href: string) => {
+    if (href === '/' || href === '/dashboard' || href === '/admin') {
+      return pathname === href;
+    }
+    return pathname === href || pathname?.startsWith(href + '/');
+  };
+
+  const isAnyDownloading = downloadingArch !== null;
 
   return (
     <motion.aside
@@ -255,7 +328,7 @@ export const Sidebar = memo(function Sidebar({ userName, onDownload, downloading
       {/* Brand */}
       <div className={`flex items-center gap-3 py-5 shrink-0 ${collapsed ? 'justify-center px-0' : 'px-5'}`}>
         <div className="flex items-center justify-center rounded-lg shrink-0 w-[34px] h-[34px] bg-gradient-to-br from-blue-600 to-green-600">
-          <Icon name="soccer" size={18} className="text-white" />
+          <img src={'/ic_launcher.png'} alt=''/>
         </div>
         {!collapsed && (
           <div>
@@ -288,7 +361,7 @@ export const Sidebar = memo(function Sidebar({ userName, onDownload, downloading
       {/* Nav links */}
       <nav className="flex-1 overflow-y-auto px-2 pb-2">
         {navItems.map(item => {
-          const active = pathname === item.href || (item.href !== '/dashboard' && item.href !== '/admin' && pathname?.startsWith(item.href));
+          const active = isActive(item.href);
           return (
             <Link
               key={item.href}
@@ -311,15 +384,60 @@ export const Sidebar = memo(function Sidebar({ userName, onDownload, downloading
       {/* Footer */}
       <div className={`shrink-0 border-t border-[color:var(--sidebar-divider)] ${collapsed ? 'px-2 py-2.5' : 'px-3 py-2.5'}`}>
         {role === ROLES.BROADCASTER && (
-          <button
-            onClick={onDownload}
-            disabled={downloading}
-            className="w-full flex items-center justify-center gap-2 rounded-lg mb-1 text-white font-medium text-[13px] cursor-pointer border-none transition-all h-9 bg-[color:var(--green)] disabled:opacity-70 hover:opacity-90"
-          >
-            {downloading ? <span className="spinner" /> : <Icon name="download" size={15} />}
-            {!collapsed && 'Download app'}
-          </button>
+          <div className="relative mb-1">
+            {/* Main Download Toggle Button */}
+            <button
+              onClick={() => setOpen(o => !o)}
+              className="w-full flex items-center justify-center gap-2 rounded-lg text-white font-medium text-[13px] cursor-pointer border-none transition-all h-9 bg-[color:var(--green)] hover:opacity-90"
+            >
+              {isAnyDownloading ? <span className="spinner" /> : <Icon name="download" size={15} />}
+              {!collapsed && (isAnyDownloading ? 'Downloading...' : 'Download app')}
+            </button>
+
+            {/* Download Menu Dropdown */}
+            {open && (
+              <div
+                ref={menuRef}
+                // REDUCED WIDTH: Changed from w-full min-w-[260px] to w-52 (208px)
+                className="absolute bottom-full mb-2 left-0 w-52 max-h-[220px] flex flex-col overflow-hidden rounded-xl bg-[color:var(--surface)] border border-[color:var(--border)] shadow-[var(--shadow-xl)] z-[999] animate-[notif-drop-in_.22s_cubic-bezier(0.32,0,0.12,1)_both]"
+              >
+                <div className="flex items-center justify-between shrink-0 px-4 py-3 border-b border-[color:var(--border)]">
+                  <span className="text-sm font-medium text-[color:var(--text)]">Downloads</span>
+                  <button 
+                    onClick={() => setOpen(false)} 
+                    className="flex items-center gap-1 border-none bg-transparent cursor-pointer rounded px-2 py-1 text-[11px] font-medium text-[color:var(--muted)] hover:text-[color:var(--text)] transition-colors"
+                  >
+                     <Icon name='close' size={12} /> Close
+                  </button>
+                </div>
+                
+                <div className="overflow-y-auto flex-1 p-2 flex flex-col gap-2">
+                  {/* ARM 64 Button */}
+                  <button
+                    onClick={() => onDownload('arm64')}
+                    disabled={isAnyDownloading}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg text-white font-medium text-[13px] cursor-pointer border-none transition-all h-9 bg-[color:var(--green)] disabled:opacity-70 disabled:cursor-not-allowed hover:opacity-90"
+                  >
+                    {downloadingArch === 'arm64' ? <span className="spinner" /> : <Icon name="phone" size={15} />}
+                    Download Arm 64
+                  </button>
+
+                  {/* ARM 32 Button */}
+                  <button
+                    onClick={() => onDownload('arm32')}
+                    disabled={isAnyDownloading}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg text-white font-medium text-[13px] cursor-pointer border-none transition-all h-9 bg-[color:var(--green)] disabled:opacity-70 disabled:cursor-not-allowed hover:opacity-90"
+                  >
+                    {downloadingArch === 'arm32' ? <span className="spinner" /> : <Icon name="phone" size={15} />}
+                    Download Arm 32 (Older)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
+        
+        {/* Logout Button */}
         <button
           onClick={handleLogout}
           title={collapsed ? 'Log out' : undefined}
@@ -332,8 +450,8 @@ export const Sidebar = memo(function Sidebar({ userName, onDownload, downloading
     </motion.aside>
   );
 });
-Sidebar.displayName = 'Sidebar';
 
+Sidebar.displayName = 'Sidebar';
 // ─── Notifications ────────────────────────────────────────────
 function timeAgo(ts: number) {
   const d = Date.now() - ts;
@@ -531,7 +649,7 @@ export const MatchCard = memo(function MatchCard({ match, onClick }: { match: an
     >
       <div className="flex justify-between items-start">
         <div>
-          <div className="text-[11px] font-medium text-[color:var(--muted)] tracking-wide mb-0.5 uppercase">{match.league}</div>
+          <div className="text-[11px] font-medium text-[color:var(--muted)] tracking-wide mb-0.5 uppercase">{match.id||""}</div>
           <div className="text-[11px] text-[color:var(--faint)]">{match.date} · {match.time}</div>
         </div>
         <StatusBadge status={match.status} />
@@ -844,8 +962,7 @@ export function PasswordStrength({ password }: { password: string }) {
 
 export function RoleSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const roles = [
-    { key: 'club',        label: 'Club',        icon: 'soccer',        desc: 'Create matches and squads' },
-    { key: 'broadcaster', label: 'Broadcaster', icon: 'camera',        desc: 'Manage streams and overlays' },
+    { key: 'broadcaster', label: 'Broadcaster', icon: 'camera',        desc: 'Create matches, squads, Manage streams and overlays' },
     { key: 'advertiser',  label: 'Advertiser',  icon: 'advertisement', desc: 'Run sponsor campaigns' },
   ];
   return (
@@ -890,7 +1007,10 @@ export function PrimaryButton({ label, loading, onClick, disabled, fullWidth = f
 // ─── PageShell ────────────────────────────────────────────────
 export function PageShell({ children, title }: { children: React.ReactNode; title: string }) {
   const { isDark, isNight, isLight, toggle } = useTheme();
-  const [downloading, setDownloading] = useState(false);
+  
+  // 1. Updated state to track the specific architecture being downloaded
+  const [downloadingArch, setDownloadingArch] = useState<'arm64' | 'arm32' | null>(null);
+  
   const [collapsed, setCollapsed]     = useState(false);
   const [isMobile, setIsMobile]       = useState(false);
   const [mobileOpen, setMobileOpen]   = useState(false);
@@ -916,15 +1036,33 @@ export function PageShell({ children, title }: { children: React.ReactNode; titl
     else { setCollapsed(p => { const n = !p; window.localStorage.setItem('switch6-sidebar-collapsed', String(n)); return n; }); }
   }, [isMobile]);
 
-  const handleDownload = useCallback(async () => {
-    setDownloading(true);
+  // 2. Updated download handler to accept the architecture and adjust the URL/filename
+  const handleDownload = useCallback(async (arch: 'arm64' | 'arm32') => {
+    setDownloadingArch(arch);
     try {
-      const res = await fetch('http://switch6.com/download/Switch6.apk');
+      // Adjust the filename based on the selected architecture
+      const fileName = arch === 'arm64' ? 'Switch6-arm64.apk' : 'Switch6-arm32.apk';
+      const res = await fetch(`${BASE_URL}/download/${fileName}`);
+      
+      if (!res.ok) throw new Error('Download failed');
+      
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'Switch6.apk'; a.click();
+      const a = document.createElement('a'); 
+      a.href = url; 
+      a.download = fileName; 
+      
+      // Best practice: append to DOM before clicking (fixes issues in Safari/Firefox)
+      document.body.appendChild(a); 
+      a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } finally { setDownloading(false); }
+    } catch (error) {
+      console.error("Download failed:", error);
+      // Optionally trigger a toast notification here
+    } finally { 
+      setDownloadingArch(null); 
+    }
   }, []);
 
   return (
@@ -934,7 +1072,13 @@ export function PageShell({ children, title }: { children: React.ReactNode; titl
         <div onClick={() => setMobileOpen(false)} className="fixed inset-0 z-[49] bg-black/50 backdrop-blur-sm" />
       )}
       <div style={isMobile ? { position: 'fixed', top: 0, left: 0, height: '100vh', zIndex: 50, transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform .25s cubic-bezier(0.32,0,0.12,1)' } : {}}>
-        <Sidebar userName={userName} onDownload={handleDownload} downloading={downloading} collapsed={isMobile ? false : collapsed} />
+        {/* 3. Pass the new props to Sidebar */}
+        <Sidebar 
+          userName={userName} 
+          onDownload={handleDownload} 
+          downloadingArch={downloadingArch} 
+          collapsed={isMobile ? false : collapsed} 
+        />
       </div>
       <div className="app-workspace flex h-screen min-w-0 flex-col overflow-hidden" style={isMobile ? { gridColumn: '1/-1' } : {}}>
         <TopBar userName={userName} isDark={isDark} isNight={isNight} isLight={isLight} onToggleTheme={toggle} title={title} onMenuToggle={toggleCollapsed} menuOpen={isMobile ? mobileOpen : !collapsed} />

@@ -21,10 +21,9 @@ export default function DashboardPage() {
   const matchList = useMemo(() => Object.values(matches), [matches]);
 
   const stats = useMemo(() => ({
-    upcoming:  matchList.filter(m => m.status === 'scheduled').length,
     scheduled: matchList.filter(m => m.status === 'scheduled').length,
     live:      matchList.filter(m => m.status === 'live').length,
-    completed: matchList.filter(m => m.status === 'finished').length,
+    completed: matchList.filter(m => m.status === 'completed').length,
     total:     matchList.length,
   }), [matchList]);
 
@@ -113,7 +112,7 @@ export default function DashboardPage() {
           <>
             {/* Stats: 2-col on mobile, 3-col on sm, 5-col on xl */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5 sm:gap-3">
-              <StatCard label="Upcoming"  count={stats.upcoming}  color="var(--green)" iconName="schedule" isDark />
+             {/* <StatCard label="Upcoming"  count={stats.upcoming}  color="var(--green)" iconName="schedule" isDark />*/}
               <StatCard label="Scheduled" count={stats.scheduled} color="var(--blue)"  iconName="event"    isDark />
               <StatCard label="Live"      count={stats.live}      color="var(--red)"   iconName="live-tv"  isDark />
               <StatCard label="Completed" count={stats.completed} color="var(--muted)" iconName="history"  isDark />

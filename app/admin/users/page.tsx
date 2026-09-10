@@ -103,7 +103,9 @@ export default function AdminUsersPage() {
       const { token } = await adminImpersonate(userId);
       localStorage.setItem('switch6-admin-token', localStorage.getItem('switch6-token') ?? '');
       setAuthToken(token);
-      router.push(roleDashboard());
+      router.push('/dashboard');
+      //not perfect still needs some work. 
+     // to use the userId youre impersonating and get the token. and navigate to his dashboard or advertisement deepding if advertiser or broadcaster.
     } catch (e: any) { setError(e.message); }
     finally { setActing(null); }
   };

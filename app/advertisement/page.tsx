@@ -19,11 +19,11 @@ import {
   createAdvertisement,
   deleteAdvertisement,
   getAdvertisementAnalytics,
-  initiateAdPayment,
-  getMyAdPayments,
+  initiatePayment,
+  getMyPayments,
   type AdvertisementData,
   type AdAnalyticsData,
-  type AdPaymentData,
+  type PaymentData,
   ROLES,
 } from '@/lib/api';
 import { AdvertiserAnalyticsPanel } from './_analytics';
@@ -83,7 +83,7 @@ export default function AdvertisementPage() {
 
   const [tab,      setTab]      = useState<Tab>('campaigns');
   const [ads,      setAds]      = useState<AdvertisementData[]>([]);
-  const [payments, setPayments] = useState<AdPaymentData[]>([]);
+  const [payments, setPayments] = useState<PaymentData[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [notice,   setNotice]   = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -115,7 +115,7 @@ export default function AdvertisementPage() {
   const totals = useMemo(() => ({
     campaigns: ads.length,
     active:    ads.filter(a => a.status === 'active').length,
-    spend:     payments.filter(p => p.status === 'completed').reduce((s, p) => s + p.amount_kes, 0),
+    spend:     payments.filter(p => p.status === 'completed').reduce((s, p) => s + p.amount, 0),
   }), [ads, payments]);
 
   const adsTotalPages = Math.max(1, Math.ceil(ads.length / ADS_PAGE_SIZE));
@@ -132,7 +132,7 @@ export default function AdvertisementPage() {
   const loadData = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [adsRes, payRes] = await Promise.allSettled([getAdvertisements(), getMyAdPayments()]);
+      const [adsRes, payRes] = await Promise.allSettled([getAdvertisements(), getMyPayments()]);
       if (adsRes.status === 'fulfilled') setAds(adsRes.value);
       if (payRes.status === 'fulfilled') setPayments(payRes.value);
     } catch (e: any) { setError(e.message); }
@@ -163,7 +163,7 @@ export default function AdvertisementPage() {
       fd.append('file', mediaFile); fd.append('duration', String(duration));
       fd.append('period', position);
       const ad = await createAdvertisement(fd);
-      await initiateAdPayment(ad.id, { amount_kes: Math.round(price), payment_method: 'mpesa' });
+      await initiatePayment(ad.id, { amount: Math.round(price), payment_method: 'mpesa',currency: 'KES' });
       showNotice('success', `Campaign "${title}" created! Proceed to payment to go live.`);
       setTitle(''); setMediaFile(null); setMediaPreview(null); setEventCount(1);
       await loadData();
@@ -439,7 +439,7 @@ export default function AdvertisementPage() {
         {tab === 'payments' && (
           <div className="flex flex-col gap-3">
             {loading ? <div className="h-40 rounded-lg bg-[color:var(--surface2)] animate-pulse" />
-            : payments.length === 0 ? (
+            : payments.filter(a => a.type === 'advertisement').length === 0 ? (
               <div className="broadcast-card rounded-lg p-10 text-center text-[color:var(--muted)]">
                 <CreditCard size={36} className="mx-auto mb-3 opacity-40" />
                 <p className="font-semibold text-[color:var(--text)] mb-1">No payments yet</p>
@@ -456,12 +456,12 @@ export default function AdvertisementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedPays.map(p => (
+                    {paginatedPays.filter(a => a.type === 'advertisement').map(p => (
                       <tr key={p.id} className="border-b border-[color:var(--border)] last:border-0 hover:bg-[color:var(--surface2)] transition-colors">
-                        <td className="px-4 py-3 font-mono text-[11px] text-[color:var(--muted)]">{p.advertisement_id.slice(0,8)}…</td>
-                        <td className="px-4 py-3 font-semibold text-[color:var(--text)]">{kes(p.amount_kes)}</td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-[color:var(--muted)]">...</td>
+                        <td className="px-4 py-3 font-semibold text-[color:var(--text)]">{kes(p.amount)}</td>
                         <td className="px-4 py-3 text-[color:var(--muted)] capitalize">{p.payment_method.replace('_', ' ')}</td>
-                        <td className="px-4 py-3 font-mono text-[11px] text-[color:var(--muted)]">{p.transaction_code ?? p.mpesa_reference ?? '—'}</td>
+                        <td className="px-4 py-3 font-mono text-[11px] text-[color:var(--muted)]">{p.transaction_code ?? p.reference ?? '—'}</td>
                         <td className="px-4 py-3"><StatusPill status={p.status} /></td>
                         <td className="px-4 py-3 text-[color:var(--muted)]">{p.paid_at ? new Date(p.paid_at).toLocaleDateString() : '—'}</td>
                       </tr>

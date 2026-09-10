@@ -22,6 +22,7 @@ import {
   type Paginated,
   ROLES,
 } from '@/lib/api';
+import { BoxSelect } from 'lucide-react';
 
 type Tab = 'plans' | 'subscriptions' | 'trash';
 
@@ -177,14 +178,17 @@ export default function AdminPlansPage() {
                   </span>
                 </div>
                 <div className="text-[24px] font-bold text-[color:var(--text)]">
-                  KES {plan.price_kes.toLocaleString()}
+                  KES {plan.price.toLocaleString()}
                   <span className="text-[13px] font-normal text-[color:var(--muted)] ml-1">/ {plan.duration_days}d</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5 text-[11px] text-[color:var(--muted)]">
                   <span>Max matches: {plan.max_matches ?? '∞'}</span>
-                  <span>Max streams: {plan.max_streams ?? '∞'}</span>
+                  <span>Max cameras: {plan.max_cameras ?? '∞'}</span>
                   <span>Ads: {plan.ads_enabled ? '✓' : '✗'}</span>
                   <span>Analytics: {plan.analytics_enabled ? '✓' : '✗'}</span>
+                   {plan.quality.map((q)=>(
+                    <span>Quality: {q?? 720}p</span>
+                   ))} 
                 </div>
                 <div className="flex gap-2 mt-auto">
                   <button onClick={() => handleToggle(plan.id)} disabled={acting === plan.id}
@@ -316,7 +320,7 @@ export default function AdminPlansPage() {
                     </span>
                   </div>
                   <div className="text-[20px] font-bold text-[color:var(--text)]">
-                    KES {plan.price_kes.toLocaleString()}
+                    KES {plan.price.toLocaleString()}
                     <span className="text-[13px] font-normal text-[color:var(--muted)] ml-1">/ {plan.duration_days}d</span>
                   </div>
                   <div className="flex gap-2 mt-auto">
@@ -346,10 +350,11 @@ export default function AdminPlansPage() {
                 {[
                   { key: 'name',          label: 'Name',              type: 'text'   },
                   { key: 'description',   label: 'Description',       type: 'text'   },
-                  { key: 'price_kes',     label: 'Price (KES)',       type: 'number' },
+                  { key: 'price',         label: 'Price',             type: 'number' },
                   { key: 'duration_days', label: 'Duration (days)',   type: 'number' },
                   { key: 'max_matches',   label: 'Max matches',       type: 'number' },
-                  { key: 'max_streams',   label: 'Max streams',       type: 'number' },
+                  { key: 'max_cameras',   label: 'Max cameras',       type: 'number' },
+                  { key: 'currency',      label: 'Currency',          type: 'text' },
                 ].map(({ key, label, type }) => (
                   <div key={key}>
                     <label className="block text-[11px] font-semibold text-[color:var(--muted)] uppercase tracking-[.05em] mb-1">{label}</label>

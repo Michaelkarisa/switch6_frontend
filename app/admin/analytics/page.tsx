@@ -48,7 +48,11 @@ type Tab =
 type ChartType = 'area' | 'bar' | 'line';
 
 // ─── helpers ─────────────────────────────────────────────────
-const kes  = (n?: number) => `KES ${(n ?? 0).toLocaleString()}`;
+const kes  = (n?: number) =>{
+console.log("number",n);
+  return `KES ${(n ?? 0).toLocaleString()}`;
+}
+
 const fmt  = (n: number) =>
   n >= 1_000_000 ? `${(n/1_000_000).toFixed(1)}M` :
   n >= 1_000     ? `${(n/1_000).toFixed(1)}K`      : String(n);
@@ -250,16 +254,16 @@ function PieCard({
 // ─── Revenue tab ─────────────────────────────────────────────
 function RevenueCharts({ data, loading }: { data: RevenueRow[]; loading: boolean }) {
   const [chartType, setChartType] = useState<ChartType>('area');
-  const totalRevenue   = useMemo(() => data.reduce((s, r) => s + r.total_kes, 0), [data]);
+  const totalRevenue   = useMemo(() => data.reduce((s, r) => s + r.total, 0), [data]);
   const totalTx        = useMemo(() => data.reduce((s, r) => s + r.transactions, 0), [data]);
   const avgDaily       = useMemo(() => data.length ? Math.round(totalRevenue / data.length) : 0, [data, totalRevenue]);
-  const peakDay        = useMemo(() => data.reduce((b, r) => r.total_kes > b.total_kes ? r : b,
+  const peakDay        = useMemo(() => data.reduce((b, r) => r.total > b.total ? r : b,
     data[0] ?? { date: '—', total_kes: 0, transactions: 0 }), [data]);
-  const revChange      = pctChg(data.map(r => r.total_kes));
+  const revChange      = pctChg(data.map(r => r.total));
   const txChange       = pctChg(data.map(r => r.transactions));
 
-  const sorted  = [...data].sort((a, b) => b.total_kes - a.total_kes);
-  const top20   = sorted.slice(0, Math.ceil(sorted.length * 0.2)).reduce((s, r) => s + r.total_kes, 0);
+  const sorted  = [...data].sort((a, b) => b.total - a.total);
+  const top20   = sorted.slice(0, Math.ceil(sorted.length * 0.2)).reduce((s, r) => s + r.total, 0);
   const pieData = [
     { name: 'Top 20% days', value: top20 },
     { name: 'Other days',   value: totalRevenue - top20 },
@@ -274,7 +278,7 @@ function RevenueCharts({ data, loading }: { data: RevenueRow[]; loading: boolean
         <KpiCard icon={<DollarSign size={18}/>} label="Total revenue"  value={kes(totalRevenue)}      color={GREEN} change={revChange} />
         <KpiCard icon={<ShoppingCart size={18}/>} label="Transactions" value={fmt(totalTx)}            color={BLUE}  change={txChange} />
         <KpiCard icon={<Activity size={18}/>}   label="Daily average"  value={kes(avgDaily)}           color={GOLD}  />
-        <KpiCard icon={<TrendingUp size={18}/>} label="Peak day"       value={kes(peakDay.total_kes)}  color={RED}   sub={peakDay.date} />
+        <KpiCard icon={<TrendingUp size={18}/>} label="Peak day"       value={kes(peakDay.total)}  color={RED}   sub={peakDay.date} />
       </div>
 
       <div className="broadcast-card rounded-lg p-4">

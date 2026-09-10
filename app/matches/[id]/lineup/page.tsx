@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PageShell, Icon, LineupSkeleton } from '@/components/ui';
 import { useRoleGuard } from '@/lib/auth';
-import { UserPrefs, getMatchById, getPlayersByClub, MatchData, ROLES } from '@/lib/api';
+import { UserPrefs, getMatchById, getPlayersByClub, MatchData, ROLES, searchBroadcasters, shareLineup, type BroadcasterOption } from '@/lib/api';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -29,12 +29,11 @@ const ALL_POSITIONS = [
   { code: 'SS',  label: 'Second Striker',       group: 'ATT' },
   { code: 'CF',  label: 'Centre Forward',       group: 'ATT' },
   { code: 'ST',  label: 'Striker',              group: 'ATT' },
-  { code: 'SUB', label: 'Substitute',           group: 'SUB' },
 ];
 
-const POS_GROUPS = ['GK', 'DEF', 'MID', 'ATT', 'SUB'] as const;
-const POS_GROUP_LABELS: Record<string, string> = { GK: 'Goalkeeper', DEF: 'Defence', MID: 'Midfield', ATT: 'Attack', SUB: 'Sub / Reserve' };
-const POS_GROUP_COLORS: Record<string, string> = { GK: 'var(--gold)', DEF: 'var(--blue)', MID: 'var(--green)', ATT: 'var(--red)', SUB: 'var(--muted)' };
+const POS_GROUPS = ['GK', 'DEF', 'MID', 'ATT'] as const;
+const POS_GROUP_LABELS: Record<string, string> = { GK: 'Goalkeeper', DEF: 'Defence', MID: 'Midfield', ATT: 'Attack'};
+const POS_GROUP_COLORS: Record<string, string> = { GK: 'var(--gold)', DEF: 'var(--blue)', MID: 'var(--green)', ATT: 'var(--red)'};
 
 const POS_ALIAS: Record<string, string> = {
   FWD: 'ST', FW: 'ST', ATT: 'ST',
@@ -149,6 +148,7 @@ type Player = {
   teamId: string;
   fromApi?: boolean;
   squadGroup: SquadGroup;
+  role: string;
 };
 
 /** Maps playerId → slot index on the current formation */
@@ -177,8 +177,24 @@ function normalisePlayer(p: any, teamId: string, squadGroup: SquadGroup): Player
     naturalPosition: normalisePos(p.position),
     teamId,
     fromApi: true,
+    role: normaliseRole(p.role ?? p.isCaptain ?? "player"),
     squadGroup,
   };
+}
+
+function normaliseRole(role:any):string{
+  if(role !=  undefined){
+  if(role =="captain" || role =="player"){
+   return role;
+  }else{
+    if(role == true){
+     return "captain";
+    }else{
+      return "player";
+    }
+  }
+}
+  return "player";
 }
 
 function buildPlayersFromTeam(team: any): Player[] {
@@ -222,7 +238,7 @@ export default function LineupPage() {
   useRoleGuard([ROLES.BROADCASTER, ROLES.ADMIN, ROLES.SUPERADMIN]);
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-
+  //const [id,setId] = useState('');
   const [match,        setMatch]        = useState<MatchData | null>(null);
   const [homePlayers,  setHomePlayers]  = useState<Player[]>([]);
   const [awayPlayers,  setAwayPlayers]  = useState<Player[]>([]);
@@ -244,10 +260,15 @@ export default function LineupPage() {
 
   // Add player form
   const [showAdd, setShowAdd] = useState(false);
+  const [showAlert, setAlert] = useState(false);
   const [newName, setNewName] = useState('');
   const [newNum,  setNewNum]  = useState('');
   const [newPos,  setNewPos]  = useState('');
   const [addErr,  setAddErr]  = useState('');
+
+  // ── Share lineup ──
+  const [savedTeamIds, setSavedTeamIds] = useState<Set<string>>(new Set());
+  const [shareDialog, setShareDialog] = useState<{ clubId: string; matchId: string } | null>(null);
 
   // Derived
   const players  = isHome ? homePlayers : awayPlayers;
@@ -275,6 +296,15 @@ export default function LineupPage() {
     const t = setTimeout(() => setNotice(null), 3500);
     return () => clearTimeout(t);
   }, [notice]);
+ 
+  useEffect(()=>{ 
+    const height = 0;
+    const width = 0;
+    if(width<height){
+      setAlert(true);
+    }
+  //  console.log("length: ",length);
+  },[showAlert]);
 
   // ── Data loading ──
   async function fetchSquad(teamData: any): Promise<Player[]> {
@@ -282,10 +312,12 @@ export default function LineupPage() {
     let base: Player[] = buildPlayersFromTeam(teamData);
     try {
       const clubPlayers = await getPlayersByClub(teamData.id);
+      
       const extras: Player[] = (clubPlayers ?? [])
         .map((p: any) => normalisePlayer(p, teamData.id, 'unassigned'))
         .filter((cp: Player) => !base.some(b => b.id === cp.id));
       base = [...base, ...extras];
+     // console.log("teamPlayers: ",base);
     } catch { /* use embedded data */ }
     return base;
   }
@@ -297,6 +329,7 @@ export default function LineupPage() {
       if (!user) { router.replace('/login'); return; }
       try {
         const m = await getMatchById(id);
+       // setId(m.id);
         setMatch(m);
         const [home, away] = await Promise.all([
           fetchSquad(m.homeTeam),
@@ -304,6 +337,10 @@ export default function LineupPage() {
         ]);
         setHomePlayers(home);
         setAwayPlayers(away);
+        setSavedTeamIds(new Set([
+          ...(home.some(p => p.squadGroup === 'starter') && m.homeTeam?.id ? [m.homeTeam.id] : []),
+          ...(away.some(p => p.squadGroup === 'starter') && m.awayTeam?.id ? [m.awayTeam.id] : []),
+        ]));
         const fmt = m.homeTeam?.formation ?? '4-3-3';
         setFormation(fmt);
         setAssignments(buildInitialAssignments(home, FORMATIONS[fmt] ?? FORMATIONS['4-3-3']));
@@ -563,6 +600,7 @@ const handleFormationChange = useCallback((fmt: string) => {
       const { addLineups,updateMatch } = await import('@/lib/api');
       await addLineups([...starterPayload, ...subPayload]);
       await updateMatch(match.id, {home_formation:match.homeTeam.formation,away_formation:match.awayTeam.formation});
+      setSavedTeamIds(prev => new Set(prev).add(teamId));
       setNotice({ type: 'success', msg: 'Lineup saved successfully.' });
     } catch {
       setNotice({ type: 'error', msg: 'Save failed. Please retry.' });
@@ -585,6 +623,7 @@ const handleFormationChange = useCallback((fmt: string) => {
       teamId,
       fromApi: false,
       squadGroup: 'unassigned',
+      role:"",
     };
     (isHome ? setHomePlayers : setAwayPlayers)(prev => [...prev, p]);
     setNewName(''); setNewNum(''); setNewPos('');
@@ -610,6 +649,17 @@ const handleFormationChange = useCallback((fmt: string) => {
             : 'bg-red-500/10 border-red-500/25 text-[color:var(--red)]'}`}>
           <Icon name={notice.type === 'success' ? 'check' : 'error'} size={15} />
           {notice.msg}
+        </div>
+      )}
+
+ {/* ── Assign dialog ── */}
+      {showAlert && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+          onClick={() => setAlert(false)}
+        >
+
+
         </div>
       )}
 
@@ -659,7 +709,7 @@ const handleFormationChange = useCallback((fmt: string) => {
                 className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface2)] cursor-pointer text-left hover:border-[color:var(--green)]/30 transition-colors"
               >
                 <div className="w-8 h-8 rounded-lg bg-[color:var(--surface3)] grid place-items-center text-[color:var(--muted)] shrink-0">
-                  <Icon name="delete" size={15} />
+                  <Icon name="close" size={15} />
                 </div>
                 <div>
                   <div className="text-[13px] font-semibold text-[color:var(--text)]">Cancel</div>
@@ -715,7 +765,7 @@ const handleFormationChange = useCallback((fmt: string) => {
                 className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface2)] cursor-pointer text-left hover:border-[color:var(--green)]/30 transition-colors"
               >
                 <div className="w-8 h-8 rounded-lg bg-[color:var(--surface3)] grid place-items-center text-[color:var(--muted)] shrink-0">
-                  <Icon name="delete" size={15} />
+                  <Icon name="close" size={15} />
                 </div>
                 <div>
                   <div className="text-[13px] font-semibold text-[color:var(--text)]">Keep {conflictDialog.incumbent.name}</div>
@@ -758,7 +808,7 @@ const handleFormationChange = useCallback((fmt: string) => {
                 </div>
               </div>
               <button onClick={() => setAssignDialog(null)} className="w-7 h-7 grid place-items-center rounded-lg text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface2)] border-none bg-transparent cursor-pointer transition-colors">
-                <Icon name="delete" size={15} />
+                <Icon name="close" size={15} />
               </button>
             </div>
             <div className="p-4 flex flex-col gap-2.5">
@@ -840,7 +890,7 @@ const handleFormationChange = useCallback((fmt: string) => {
                 <div className="text-[12px] text-[color:var(--muted)] mt-px">Added as unassigned — drag to pitch or assign</div>
               </div>
               <button onClick={() => setShowAdd(false)} className="w-7 h-7 grid place-items-center rounded-lg text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface2)] border-none bg-transparent cursor-pointer">
-                <Icon name="delete" size={15} />
+                <Icon name="close" size={15} />
               </button>
             </div>
             <div className="p-5 flex flex-col gap-4 overflow-y-auto">
@@ -913,7 +963,7 @@ const handleFormationChange = useCallback((fmt: string) => {
         <div className="broadcast-card rounded-lg px-5 py-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="text-[11px] font-medium text-[color:var(--muted)] tracking-[.04em] uppercase mb-0.5">
-              {match?.league ?? 'Lineup editor'}
+              {match?.league.name ?? 'Lineup editor'}
             </div>
             <div className="text-[20px] font-semibold tracking-tight text-[color:var(--text)] leading-snug">
               {match?.homeTeam?.name ?? 'Home'} <span className="text-[color:var(--faint)] font-normal">vs</span> {match?.awayTeam?.name ?? 'Away'}
@@ -939,20 +989,32 @@ const handleFormationChange = useCallback((fmt: string) => {
             const t     = home ? match?.homeTeam : match?.awayTeam;
             const pList = home ? homePlayers : awayPlayers;
             const active = isHome === home;
+            const isSaved = !!(t?.id && savedTeamIds.has(t.id));
             return (
-              <button key={String(home)} onClick={() => handleTeamSwitch(home)}
-                className={`h-13 py-2 rounded-xl border text-[14px] cursor-pointer transition-all font-medium flex flex-col items-center justify-center gap-0.5 px-3
-                  ${active ? 'border-green-500/40 bg-green-500/[.09] text-[color:var(--green)]' : 'border-[color:var(--border)] bg-[color:var(--surface2)] text-[color:var(--muted)] hover:border-green-500/20'}`}>
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${active ? 'bg-[color:var(--green)]' : 'bg-[color:var(--faint)]'}`} />
-                  <span className="truncate">{t?.name ?? (home ? 'Home' : 'Away')}</span>
-                </div>
-                <span className={`text-[10px] font-normal ${active ? 'text-[color:var(--green)]/70' : 'text-[color:var(--faint)]'}`}>
-                  {pList.filter(p => p.squadGroup === 'starter').length} starters
-                  · {pList.filter(p => p.squadGroup === 'sub').length} subs
-                  {pList.filter(p => p.squadGroup === 'unassigned').length > 0 && ` · ${pList.filter(p => p.squadGroup === 'unassigned').length} unassigned`}
-                </span>
-              </button>
+              <div key={String(home)} className="relative">
+                <button onClick={() => handleTeamSwitch(home)}
+                  className={`w-full h-13 py-2 rounded-xl border text-[14px] cursor-pointer transition-all font-medium flex flex-col items-center justify-center gap-0.5 px-3
+                    ${active ? 'border-green-500/40 bg-green-500/[.09] text-[color:var(--green)]' : 'border-[color:var(--border)] bg-[color:var(--surface2)] text-[color:var(--muted)] hover:border-green-500/20'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${active ? 'bg-[color:var(--green)]' : 'bg-[color:var(--faint)]'}`} />
+                    <span className="truncate">{t?.name ?? (home ? 'Home' : 'Away')}</span>
+                  </div>
+                  <span className={`text-[10px] font-normal ${active ? 'text-[color:var(--green)]/70' : 'text-[color:var(--faint)]'}`}>
+                    {pList.filter(p => p.squadGroup === 'starter').length} starters
+                    · {pList.filter(p => p.squadGroup === 'sub').length} subs
+                    {pList.filter(p => p.squadGroup === 'unassigned').length > 0 && ` · ${pList.filter(p => p.squadGroup === 'unassigned').length} unassigned`}
+                  </span>
+                </button>
+                {isSaved && t?.id && match?.id && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShareDialog({ clubId: t.id, matchId: match.id }); }}
+                    title={`Share ${t?.name ?? ''} lineup`}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md grid place-items-center bg-[color:var(--surface3)] text-[color:var(--muted)] hover:text-[color:var(--green)] hover:bg-green-500/10 transition-colors cursor-pointer border-none"
+                  >
+                    <Icon name="share" size={12} />
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -1095,7 +1157,7 @@ const handleFormationChange = useCallback((fmt: string) => {
                 <div className="flex items-center justify-between mb-2.5">
                   <div>
                     <span className="text-[11px] font-semibold text-[color:var(--faint)] tracking-[.04em] uppercase">Not in squad</span>
-                    <span className="text-[11px] font-medium text-[color:var(--faint)] ml-2">{unassigned.length} club players</span>
+                    <span className="text-[11px] font-medium text-[color:var(--faint)] ml-2">{unassigned.length} players</span>
                   </div>
                   <span className="text-[10px] text-[color:var(--faint)] italic">Drag to pitch or tap to add</span>
                 </div>
@@ -1128,7 +1190,7 @@ const handleFormationChange = useCallback((fmt: string) => {
                   <div className="text-[11px] text-[color:var(--muted)] mt-px flex items-center gap-1.5 flex-wrap">
                     <span className="text-[color:var(--green)]">{starters.length} starters</span>
                     <span className="text-[color:var(--blue)]">· {subs.length} subs</span>
-                    {unassigned.length > 0 && <span className="text-[color:var(--faint)]">· {unassigned.length} club</span>}
+                    {unassigned.length > 0 && <span className="text-[color:var(--faint)]">· {unassigned.length} unassigned</span>}
                   </div>
                 </div>
                 <button
@@ -1192,7 +1254,14 @@ const handleFormationChange = useCallback((fmt: string) => {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-medium text-[color:var(--text)] truncate leading-snug">{p.name}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <div className="text-[13px] font-medium text-[color:var(--text)] truncate leading-snug">{p.name} </div>
+                           {p.role.toLowerCase() =="captain" && (<span className={`text-[14px] font-bold px-1.5 py-px rounded border font-mono
+                              ${'text-[color:var(--green)] border-black-500/25 bg-black-500/25'}`}>
+                              C
+                            </span>)}
+                           
+                          </div>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                             <span className={`text-[10px] font-bold px-1.5 py-px rounded border font-mono
                               ${onPitch
@@ -1239,10 +1308,10 @@ const handleFormationChange = useCallback((fmt: string) => {
             <div className="broadcast-card rounded-xl p-3.5">
               <div className="text-[11px] font-semibold text-[color:var(--muted)] tracking-[.04em] uppercase mb-3">Lineup summary</div>
               {[
-                { label: 'On pitch (XI)',    value: `${filledSlots} / ${totalSlots}`, color: filledSlots === totalSlots ? 'var(--green)' : 'var(--text)' },
+                { label: 'On pitch (XI)',   value: `${filledSlots} / ${totalSlots}`, color: filledSlots === totalSlots ? 'var(--green)' : 'var(--text)' },
                 { label: 'Match starters',  value: String(starters.length),           color: 'var(--green)' },
                 { label: 'Match subs',      value: String(subs.length),               color: 'var(--blue)' },
-                { label: 'Club (not added)',value: String(unassigned.length),          color: 'var(--faint)' },
+                { label: 'Unassigned',      value: String(unassigned.length),          color: 'var(--faint)' },
                 { label: 'Formation',       value: formation,                          color: 'var(--text)' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="flex justify-between items-center py-1.5 border-b border-[color:var(--border2)] last:border-0">
@@ -1254,6 +1323,143 @@ const handleFormationChange = useCallback((fmt: string) => {
           </div>
         </div>
       </div>
+
+      {shareDialog && (
+        <ShareLineupDialog
+          matchId={shareDialog.matchId}
+          clubId={shareDialog.clubId}
+          onClose={() => setShareDialog(null)}
+        />
+      )}
     </PageShell>
+  );
+}
+// ─── Share lineup dialog ───────────────────────────────────────────────────
+function ShareLineupDialog({ matchId, clubId, onClose }: {
+  matchId: string; clubId: string; onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<BroadcasterOption[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [selected, setSelected] = useState<BroadcasterOption | null>(null);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    const handle = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await searchBroadcasters(query.trim());
+        setResults(r);
+      } catch {
+        setResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  const handleShare = async () => {
+    if (!selected) return;
+    setSending(true);
+    setError('');
+    try {
+      await shareLineup(matchId, clubId, selected.id);
+      setDone(true);
+    } catch (e: any) {
+      setError(e.message || 'Could not share this lineup. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 backdrop-blur-sm" onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm mx-4 rounded-xl broadcast-card overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)]">
+          <div className="text-[15px] font-semibold text-[color:var(--text)]">Share lineup</div>
+          <button onClick={onClose} className="w-7 h-7 rounded-md grid place-items-center text-[color:var(--muted)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+
+        <div className="p-5">
+          {done ? (
+            <div className="text-center py-4">
+              <div className="w-12 h-12 rounded-full bg-green-500/15 grid place-items-center mx-auto mb-3">
+                <Icon name="check" size={22} />
+              </div>
+              <div className="text-[14px] font-medium text-[color:var(--text)] mb-1">
+                Lineup shared with {selected?.name}.
+              </div>
+              <p className="text-[12px] text-[color:var(--muted)] mb-4">
+                They'll see it on their Shared lineups page and can import it into one of their own matches.
+              </p>
+              <button onClick={onClose} className="h-9 px-4 rounded-lg border-none bg-[color:var(--green)] text-white text-[13px] font-medium cursor-pointer">
+                Done
+              </button>
+            </div>
+          ) : (
+            <>
+              <label className="block text-[12px] text-[color:var(--muted)] mb-1.5">Search broadcasters by name or email</label>
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
+                placeholder="e.g. jane@stream.co"
+                className="w-full h-10 px-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface2)] text-[13px] text-[color:var(--text)] outline-none focus:border-green-500/40"
+              />
+
+              <div className="mt-3 max-h-56 overflow-y-auto flex flex-col gap-1.5">
+                {searching && (
+                  <div className="text-[12px] text-[color:var(--muted)] py-3 text-center">Searching…</div>
+                )}
+                {!searching && query.trim() && results.length === 0 && (
+                  <div className="text-[12px] text-[color:var(--muted)] py-3 text-center">No broadcasters found.</div>
+                )}
+                {results.map(b => (
+                  <button
+                    key={b.id}
+                    onClick={() => setSelected(b)}
+                    className={[
+                      'flex items-center justify-between w-full text-left px-3 py-2.5 rounded-lg border cursor-pointer transition-colors',
+                      selected?.id === b.id
+                        ? 'border-green-500/45 bg-green-500/[.07]'
+                        : 'border-[color:var(--border)] bg-[color:var(--surface2)] hover:border-green-500/25',
+                    ].join(' ')}
+                  >
+                    <div>
+                      <div className="text-[13px] font-medium text-[color:var(--text)]">{b.name}</div>
+                      <div className="text-[11px] text-[color:var(--muted)]">{b.email}</div>
+                    </div>
+                    {selected?.id === b.id && <Icon name="check" size={14} />}
+                  </button>
+                ))}
+              </div>
+
+              {error && (
+                <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/[.08] px-3 py-2 text-[12px] text-red-400">
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={handleShare}
+                disabled={!selected || sending}
+                className="mt-4 w-full h-10 rounded-lg border-none bg-[color:var(--green)] text-white text-[13px] font-semibold cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {sending ? <span className="spinner" /> : <Icon name="share" size={14} />}
+                {selected ? `Share with ${selected.name}` : 'Select a broadcaster'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -136,9 +136,9 @@ export default function AdminDashboardPage() {
 
               <div className="broadcast-card rounded-lg p-4">
                 <h3 className="text-[11px] font-semibold uppercase tracking-[.06em] text-[color:var(--muted)] mb-3">Revenue</h3>
-                <InfoRow label="Total"        value={kes(data.revenue.total_kes)}  color="var(--green)" />
-                <InfoRow label="Today"        value={kes(data.revenue.today_kes)}  color="var(--blue)"  />
-                <InfoRow label="This month"   value={kes(data.revenue.month_kes)}  color="var(--gold)"  />
+                <InfoRow label="Total"        value={kes(data.revenue.total)}  color="var(--green)" />
+                <InfoRow label="Today"        value={kes(data.revenue.today)}  color="var(--blue)"  />
+                <InfoRow label="This month"   value={kes(data.revenue.month)}  color="var(--gold)"  />
                 <InfoRow label="Transactions" value={data.revenue.transactions} />
                 {sparkline.length > 1 && (
                   <div className="mt-3 pt-3 border-t border-[color:var(--border)]">

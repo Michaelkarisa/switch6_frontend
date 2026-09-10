@@ -29,6 +29,8 @@ export default function SettingsPage() {
     if (!user) { router.replace('/login'); return; }
     setProfile({ name: user.name ?? '', email: user.email ?? '', phone: user.phone ?? '' });
     setRole(getUserRole());
+
+    setPrefs({streamQuality:`${user.quality}p`,language: 'en', timezone: 'UTC',notifications: true, darkMode: true, autoSave: true,});
   }, [router]);
 
   const handleSave = async () => {
@@ -98,13 +100,13 @@ export default function SettingsPage() {
             <Toggle label="Match notifications" sub="Live event alerts"    value={prefs.notifications} onChange={() => toggle('notifications')} />
             <Toggle label="Auto-save lineups"   sub="Instant save on edit" value={prefs.autoSave}      onChange={() => toggle('autoSave')} />
           </Section>
-
+           {/*role == "broadcaster" && (
           <Section title="Stream" icon="video">
-            <SelectField label="Quality"  value={prefs.streamQuality} options={['720p','1080p','4K']}                                               onChange={(v: string) => select('streamQuality', v)} />
-            <SelectField label="Language" value={prefs.language}      options={['en','fr','es','de','pt']}                                          onChange={(v: string) => select('language', v)} />
+            <SelectField label="Quality"  value={prefs.streamQuality} options={['480p','720p','1080p','4K']} onChange={(v: string) => select('streamQuality', v)} />
+            <SelectField label="Language" value={prefs.language}      options={['en','fr','es','de','pt']} onChange={(v: string) => select('language', v)} />
             <SelectField label="Timezone" value={prefs.timezone}      options={['UTC','UTC+1','UTC+2','UTC+3','UTC+5:30','UTC+8','UTC-5','UTC-8']}  onChange={(v: string) => select('timezone', v)} />
           </Section>
-
+          )*/}
           <div className="lg:col-span-2 flex items-center gap-3 flex-wrap">
             <button onClick={handleSave} disabled={saving}
               className="flex h-10 items-center gap-2 rounded-lg bg-[color:var(--green)] px-5 text-[14px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60">

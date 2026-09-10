@@ -219,7 +219,7 @@ export default function MatchAnalyticsPage() {
 
   // ── Derived data ──────────────────────────────────────────────
   const ov  = data?.overview;
-  const vw  = data?.viewers;
+  const vw  = data?.views;
   const ads = data?.ads;
 
   // Merge viewer timeline + ad timeline for combined chart
@@ -228,7 +228,7 @@ export default function MatchAnalyticsPage() {
     const adMap = new Map(data.ad_timeline.map(r => [r.minute, r.impressions]));
     return data.timeline.map(r => ({
       minute: r.minute,
-      viewers: r.viewers,
+      viewers: r.views,
       ad_impressions: adMap.get(r.minute) ?? 0,
     }));
   }, [data]);
@@ -342,9 +342,9 @@ export default function MatchAnalyticsPage() {
             {/* ── KPI row 1: viewers ──────────────────────────────── */}
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               <KpiCard label="Total views"     value={fmt(ov!.total_views)}     icon={<Eye size={14}/>}       color={BLUE}   />
-              <KpiCard label="Unique viewers"  value={fmt(ov!.unique_viewers)}  icon={<Users size={14}/>}     color={GREEN}  />
-              <KpiCard label="Peak viewers"    value={fmt(vw!.peak_viewers)}    icon={<TrendingUp size={14}/>} color={GOLD}  />
-              <KpiCard label="Anonymous"       value={fmt(ov!.anonymous_views)} icon={<Globe size={14}/>}     color={MUTED}  sub="non-logged-in" />
+              {/*<KpiCard label="Unique viewers"  value={fmt(ov!.unique_views)}  icon={<Users size={14}/>}     color={GREEN}  />*/}
+              <KpiCard label="Peak views"    value={fmt(vw!.peak_views)}    icon={<TrendingUp size={14}/>} color={GOLD}  />
+             {/*<KpiCard label="Anonymous"       value={fmt(ov!.anonymous_views)} icon={<Globe size={14}/>}     color={MUTED}  sub="non-logged-in" />*/}
             </div>
 
             {/* ── KPI row 2: ads ──────────────────────────────────── */}
@@ -418,8 +418,8 @@ export default function MatchAnalyticsPage() {
                     <Tooltip content={<ChartTooltip />} />
                     <Bar dataKey="viewers" name="Viewers" radius={[3,3,0,0]}>
                       {data.engagement.map((d, i) => {
-                        const max = Math.max(...data.engagement.map(x => x.viewers), 1);
-                        const alpha = 0.4 + (d.viewers / max) * 0.6;
+                        const max = Math.max(...data.engagement.map(x => x.views), 1);
+                        const alpha = 0.4 + (d.views / max) * 0.6;
                         return <Cell key={i} fill={BLUE} fillOpacity={alpha} />;
                       })}
                     </Bar>
@@ -428,9 +428,9 @@ export default function MatchAnalyticsPage() {
                 {/* First/second half summary */}
                 <div className="grid grid-cols-3 gap-2 mt-3">
                   {[
-                    { label: '1st Half',  value: fmt(vw!.viewers_first_half),  color: BLUE  },
-                    { label: '2nd Half',  value: fmt(vw!.viewers_second_half), color: GREEN },
-                    { label: 'Extra',     value: fmt(vw!.viewers_extra_time),  color: GOLD  },
+                    { label: '1st Half',  value: fmt(vw!.views_first_half),  color: BLUE  },
+                    { label: '2nd Half',  value: fmt(vw!.views_second_half), color: GREEN },
+                    { label: 'Extra',     value: fmt(vw!.views_extra_time),  color: GOLD  },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="text-center py-2 rounded-lg bg-[color:var(--surface2)]">
                       <div className="text-[15px] font-bold" style={{ color }}>{value}</div>
@@ -444,7 +444,7 @@ export default function MatchAnalyticsPage() {
                 <SectionTitle>Peak minutes</SectionTitle>
                 <div className="flex flex-col gap-0.5">
                   {data.peak_minutes.map((r, idx) => {
-                    const pct = vw!.peak_viewers > 0 ? Math.round(r.viewers / vw!.peak_viewers * 100) : 0;
+                    const pct = vw!.peak_views > 0 ? Math.round(r.views / vw!.peak_views * 100) : 0;
                     const colors = [GOLD, BLUE, GREEN, PURPLE, TEAL];
                     return (
                       <div key={r.minute} className="flex items-center gap-3 py-2 border-b border-[color:var(--border)] last:border-0">
@@ -459,7 +459,7 @@ export default function MatchAnalyticsPage() {
                             style={{ width: `${pct}%`, background: colors[idx] }} />
                         </div>
                         <span className="text-[12px] font-semibold text-[color:var(--text)] w-14 text-right shrink-0">
-                          {fmt(r.viewers)}
+                          {fmt(r.views)}
                         </span>
                       </div>
                     );

@@ -275,7 +275,7 @@ export default function AdminAdvertisementsPage() {
                   { label: 'Impressions',   value: analytics.data.impressions ?? 0 },
                   { label: 'Plays',         value: analytics.data.plays ?? 0 },
                   { label: 'Completions',   value: analytics.data.completed ?? 0 },
-                  { label: 'Avg viewers',   value: analytics.data.avg_viewers ?? '—' },
+                  { label: 'Avg viewers',   value: analytics.data.avg_views ?? '—' },
                   { label: 'Total play time', value: analytics.data.total_play_time ? `${analytics.data.total_play_time}s` : '—' },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex items-center justify-between py-2 border-b border-[color:var(--border)] last:border-0">

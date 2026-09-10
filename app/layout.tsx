@@ -3,13 +3,13 @@ import './globals.css';
 import { ThemeProvider } from '@/lib/ThemeContext';
 
 export const metadata: Metadata = {
-  title: 'Switch6 — Sports Broadcast Studio',
+  title: 'Switch6',
   description: 'Professional match management, live streaming, and advertisement platform for football clubs.',
   keywords: ['sports broadcasting', 'match management', 'live streaming', 'football', 'advertisement'],
   authors: [{ name: 'Switch6' }],
   robots: 'noindex, nofollow', // internal platform — not for public indexing
   openGraph: {
-    title: 'Switch6 — Sports Broadcast Studio',
+    title: 'Switch6',
     description: 'Professional match management and live streaming platform',
     type: 'website',
   },

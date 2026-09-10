@@ -204,7 +204,8 @@ export default function CreateMatchPage() {
     setError('');
     try {
       const user = UserPrefs.get();
-      const matchDateTime = new Date(`${date}T${time}`).toISOString();
+      const matchDateTime = new Date(`${date}T${time}:00.000Z`).toISOString();
+      new Date()
       await addMatch({
         authorid: user?.id,
         home_club_id: homeClub.id,
@@ -212,8 +213,8 @@ export default function CreateMatchPage() {
         match_date: matchDateTime,
         status,
         venue,
-        referee: referee?.id,
-        leagueid: leagueType === 'Friendly' ? null : league?.id,
+        referee_id: referee?.id,
+        league_id: leagueType === 'Friendly' ? null : league?.id,
         home_formation: homeFormation,
         away_formation: awayFormation,
       });

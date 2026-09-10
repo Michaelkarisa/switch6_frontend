@@ -1,13 +1,15 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState,useRef } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
-  Activity, BarChart3, Camera, ChevronRight, Clapperboard, Gauge,
+  Activity, BarChart3, Camera, ChevronRight, Clapperboard, Download, Gauge,
   LayoutGrid, Megaphone, Play, Radio, RadioTower, ShieldCheck,
   Signal, Smartphone, Trophy, Users, Video, Workflow, Zap,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Icon } from '@/components/ui';
+import { BASE_URL } from '@/lib/api';
 
 type Tone = 'green' | 'blue' | 'gold' | 'red';
 const toneColor:  Record<Tone, string> = { green: 'var(--green)', blue: 'var(--blue)', gold: 'var(--gold)', red: 'var(--red)' };
@@ -17,7 +19,6 @@ const toneBorder: Record<Tone, string> = { green: 'rgba(10,143,82,.30)', blue: '
 const actions = [
   { icon: Radio,       title: 'Broadcaster', label: 'Matches & Streams',  href: '/register?role=broadcaster', tone: 'green' as Tone },
   { icon: Megaphone,   title: 'Advertiser',  label: 'Sponsor Campaigns',  href: '/register?role=advertiser',  tone: 'gold'  as Tone },
-  { icon: ShieldCheck, title: 'Admin',       label: 'System Management',  href: '/login',                     tone: 'blue'  as Tone },
 ];
 const stats = [
   { value: '500+', label: 'Clubs onboarded',  icon: Activity },
@@ -51,8 +52,47 @@ function IconBox({ icon: I, tone = 'green' }: { icon: LucideIcon; tone?: Tone })
 
 export default function WelcomePage() {
   const [ready, setReady] = useState(false);
+  const [isAnyDownloading , setDownloading] = useState(false);
+  const [downloadingArch, setArch] = useState(null); 
+   const [open, setOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const [authButtontext, setText] = useState('Sign in');
   useEffect(() => { const t = setTimeout(() => setReady(true), 80); return () => clearTimeout(t); }, []);
-
+  useEffect(()=>{
+    const token = localStorage.getItem('switch6-token');
+    if(token){
+      setText('Dashboard');
+    }
+  },[authButtontext]);
+ const onDownload= async(arch: any)=>{
+  setDownloading(true);
+   setArch(arch);
+    try {
+      // Adjust the filename based on the selected architecture
+      const fileName = arch === 'arm64' ? 'Switch6-arm64.apk' : 'Switch6-arm32.apk';
+      const res = await fetch(`${BASE_URL}/download/${fileName}`);
+      
+      if (!res.ok) throw new Error('Download failed');
+      
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); 
+      a.href = url; 
+      a.download = fileName; 
+      
+      // Best practice: append to DOM before clicking (fixes issues in Safari/Firefox)
+      document.body.appendChild(a); 
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Download failed:", error);
+      // Optionally trigger a toast notification here
+    } finally { 
+      setArch(null);
+       setDownloading(false); 
+    }
+ }
   return (
     <div className="relative w-full min-h-screen bg-[color:var(--bg)] text-[color:var(--text)]">
       <div className="fixed inset-0 pointer-events-none z-0 bg-[color:var(--app-bg)]" />
@@ -61,7 +101,7 @@ export default function WelcomePage() {
       <header className="sticky top-0 z-50 flex items-center justify-between gap-4 backdrop-blur-lg h-[60px] border-b border-[color:var(--border)] bg-[color:var(--topbar-bg)] px-4 sm:h-[72px] sm:px-6 lg:px-12">
         <Link href="/" className="flex items-center gap-2 sm:gap-2.5 no-underline">
           <div className="grid place-items-center rounded-lg shrink-0 w-8 h-8 bg-gradient-to-br from-blue-600 to-green-600 sm:w-[38px] sm:h-[38px]">
-            <Radio size={17} color="#fff" />
+           <img src={'/ic_launcher.png'} alt=''/>
           </div>
           <div>
             <strong className="block text-[16px] font-semibold tracking-tight text-[color:var(--text)] sm:text-[18px]">Switch6</strong>
@@ -71,7 +111,7 @@ export default function WelcomePage() {
         <div className="flex items-center gap-2">
           <Link href="/login"
             className="inline-flex items-center justify-center rounded-lg no-underline text-[13px] font-medium h-8 px-3 bg-[color:var(--surface2)] text-[color:var(--text)] border border-[color:var(--border)] hover:border-[color:var(--green)]/40 transition-colors sm:h-[38px] sm:px-3.5">
-            Sign in
+            {authButtontext}
           </Link>
           <Link href="/register"
             className="inline-flex items-center justify-center rounded-lg no-underline text-[13px] font-medium text-white h-8 px-3 bg-[color:var(--green)] hover:opacity-90 transition-opacity sm:h-[38px] sm:px-3.5">
@@ -252,7 +292,67 @@ export default function WelcomePage() {
             </div>
           </div>
         </section>
+         {/*── Downloads ── */}
+          <section className="mx-auto w-full max-w-[900px] px-4 pb-16 sm:px-6 sm:pb-20 lg:px-12">
+          <div className="rounded-xl p-6 sm:p-8 lg:p-[clamp(24px,5vw,44px)] border border-green-500/18 bg-[color:var(--card-bg)] text-center">
+            <Download size={30} color="var(--green)" className="mx-auto mb-3 sm:mb-4 sm:w-[34px] sm:h-[34px]" />
+            <h2 className="font-semibold leading-none mb-3 tracking-[-0.03em] text-[color:var(--text)] text-[clamp(20px,3vw,34px)]">Ready to Start broadcasting?</h2>
+            <p className="text-sm font-normal leading-relaxed mx-auto mb-6 text-[color:var(--muted)] max-w-[540px]">
+              Available for broadcasting use only Download to your smartphone. For best perfomance and better video quality make sure your smartphone has atleast 4GB Ram, a good processor(snapdragon or Mediatek) and a good quality rear main camera(atleast 20mp and atleast able to shoot videos at 720p@30fps).
+            </p>
+          <div className="relative mb-1">
+            {/* Main Download Toggle Button */}
+            <button
+              onClick={() => setOpen(o => !o)}
+              className="w-full flex items-center justify-center gap-2 rounded-lg text-white font-medium text-[13px] cursor-pointer border-none transition-all h-9 bg-[color:var(--green)] hover:opacity-90"
+            >
+              {isAnyDownloading ? <span className="spinner" /> : <Icon name="download" size={15} />}
+              {isAnyDownloading ? 'Downloading...' : 'Download app'}
+            </button>
 
+            {/* Download Menu Dropdown */}
+            {open && (
+              <div
+                ref={menuRef}
+                // REDUCED WIDTH: Changed from w-full min-w-[260px] to w-52 (208px)
+                className="absolute bottom-full mb-2 left-0 w-52 max-h-[220px] flex flex-col overflow-hidden rounded-xl bg-[color:var(--surface)] border border-[color:var(--border)] shadow-[var(--shadow-xl)] z-[999] animate-[notif-drop-in_.22s_cubic-bezier(0.32,0,0.12,1)_both]"
+              >
+                <div className="flex items-center justify-between shrink-0 px-4 py-3 border-b border-[color:var(--border)]">
+                  <span className="text-sm font-medium text-[color:var(--text)]">Downloads</span>
+                  <button 
+                    onClick={() => setOpen(false)} 
+                    className="flex items-center gap-1 border-none bg-transparent cursor-pointer rounded px-2 py-1 text-[11px] font-medium text-[color:var(--muted)] hover:text-[color:var(--text)] transition-colors"
+                  >
+                    <Icon name='close' size={12} /> Close
+                  </button>
+                </div>
+                
+                <div className="overflow-y-auto flex-1 p-2 flex flex-col gap-2">
+                  {/* ARM 64 Button */}
+                  <button
+                    onClick={() => onDownload('arm64')}
+                    disabled={isAnyDownloading}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg text-white font-medium text-[13px] cursor-pointer border-none transition-all h-9 bg-[color:var(--green)] disabled:opacity-70 disabled:cursor-not-allowed hover:opacity-90"
+                  >
+                    {downloadingArch === 'arm64' ? <span className="spinner" /> : <Icon name="phone" size={15} />}
+                    Download Arm 64
+                  </button>
+
+                  {/* ARM 32 Button */}
+                  <button
+                    onClick={() => onDownload('arm32')}
+                    disabled={isAnyDownloading}
+                    className="w-full flex items-center justify-center gap-2 rounded-lg text-white font-medium text-[13px] cursor-pointer border-none transition-all h-9 bg-[color:var(--green)] disabled:opacity-70 disabled:cursor-not-allowed hover:opacity-90"
+                  >
+                    {downloadingArch === 'arm32' ? <span className="spinner" /> : <Icon name="phone" size={15} />}
+                    Download Arm 32 (Older)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          </div>
+         </section>
       </main>
     </div>
   );

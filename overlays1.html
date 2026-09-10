@@ -257,6 +257,10 @@
     align-items: center;
     gap: 0.4em;
   }
+  .team-logo {
+    font-size: clamp(10px, 1.4vw, 16px);
+    flex-shrink: 0;
+  }
   .team-name {
     font-family: 'Barlow Condensed', sans-serif;
     font-size: clamp(9px, 1.3vw, 15px);
@@ -380,6 +384,108 @@
   .sub-in  { color: var(--sub-in);  }
   .sub-out { color: var(--sub-out); }
 
+  /* ── Ad image banner — bottom 22% of canvas, full width ── */
+  .ad-banner {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 22%;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .ad-banner.visible { display: flex; }
+
+  .ad-banner-bar {
+    position: absolute;
+    inset: 0;
+    background: rgb(10,10,10);
+    border-top: 1px solid rgb(60,60,60);
+  }
+
+  /* Mock sponsor image inside the bar */
+  .ad-banner-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .ad-banner-img-mock {
+    height: 80%;
+    aspect-ratio: 4/1;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 0 24px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(14px, 2vw, 22px);
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Sponsor logo placeholder (left) */
+  .ad-sponsor-logo {
+    width: clamp(28px, 4vw, 48px);
+    height: clamp(28px, 4vw, 48px);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(14px, 2vw, 24px);
+    flex-shrink: 0;
+  }
+
+  .ad-sponsor-text { flex: 1; text-align: center; }
+  .ad-sponsor-tagline {
+    font-size: clamp(8px, 1vw, 12px);
+    font-weight: 400;
+    letter-spacing: 3px;
+    opacity: 0.7;
+    display: block;
+    margin-top: 2px;
+  }
+
+  /* Progress bar at bottom of ad bar */
+  .ad-progress-track {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: rgba(255,255,255,0.08);
+  }
+  .ad-progress-fill {
+    height: 100%;
+    background: var(--clock-fg);
+    width: 100%;
+    transform-origin: left;
+    transition: transform 0.1s linear;
+  }
+
+  /* Ad label top-right */
+  .ad-label {
+    position: absolute;
+    top: 6px; right: 10px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: clamp(7px, 0.9vw, 10px);
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.3);
+  }
+
+  /* Slide up from bottom animation */
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  .ad-banner.visible { animation: slideUp 0.3s ease-out both; }
+
   /* Banner slide-in animation */
   @keyframes slideIn {
     from { transform: translateX(-110%); }
@@ -394,18 +500,19 @@
     display: none;
     align-items: center;
     justify-content: center;
+    padding: 0 5.5%;   /* mirrors MARGIN=70/1280 ≈ 5.5% */
+    gap: 1.6%;         /* mirrors GAP=20/1280 */
   }
   .lineup-overlay.visible { display: flex; }
 
   .field-wrap {
     position: relative;
-    width: 70%;
-    aspect-ratio: 8/5;
+    flex: 0 0 67%;      /* FIELD_W=860 / (860+20+260)=1140 ≈ 75%, but leave room */
+    aspect-ratio: 860/490;
     background: var(--field-green);
     border: 2px solid var(--field-line);
     border-radius: 2px;
     overflow: visible;
-    margin-top: 5%;
   }
 
   /* Field markings */
@@ -489,20 +596,19 @@
   .lineup-team-label.away { right: 0; text-align: right; }
 
   /* ── Subs table ── */
+  /* ── Subs table — sits to the right of the field in the flex row ── */
   .subs-table {
-    position: absolute;
-    right: calc(12 / 1280 * 100%);
-    top: 50%;
-    transform: translateY(-50%);
-    width: 22%;
-    min-width: 160px;
+    flex: 0 0 auto;
+    width: 21%;
+    min-width: 140px;
     background: rgba(10,10,25,0.95);
     border: 1px solid #333;
     border-radius: 4px;
     overflow: hidden;
     display: none;
+    align-self: center;
   }
-  .subs-table.visible { display: block; animation: fadeIn 0.4s ease both; }
+  .subs-table.visible { display: block; animation: fadeIn 0.3s ease both; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
 
   .subs-header {
@@ -624,6 +730,9 @@
     <button class="nav-btn" onclick="showWidget('lineup')" id="btn-lineup">
       <span class="dot"></span> Lineup Overlay
     </button>
+    <button class="nav-btn" onclick="showWidget('adbanner')" id="btn-adbanner">
+      <span class="dot"></span> Ad Banner
+    </button>
 
     <div class="sidebar-sep"></div>
     <div class="sidebar-title">Trigger</div>
@@ -675,6 +784,15 @@
       </div>
 
       <div class="sidebar-sep"></div>
+      <div class="controls-title">Ad Banners</div>
+      <div class="btn-row">
+        <button class="btn" onclick="triggerAdBanner('sponsor')"  style="color:#ffd93d;border-color:rgba(255,217,61,0.3)">🏷  Sponsor Banner</button>
+        <button class="btn" onclick="triggerAdBanner('product')"  style="color:#6ec6ff;border-color:rgba(110,198,255,0.3)">📦  Product Banner</button>
+        <button class="btn" onclick="triggerAdBanner('promo')"    style="color:#a8ff78;border-color:rgba(168,255,120,0.3)">🎯  Promo Banner</button>
+        <button class="btn" onclick="hideAdBanner()" style="margin-top:4px">✕  Hide Ad</button>
+      </div>
+
+      <div class="sidebar-sep"></div>
       <div class="controls-title">Lineup</div>
       <div class="btn-row">
         <button class="btn primary" onclick="toggleLineup()">⊞  Toggle Lineup</button>
@@ -698,12 +816,14 @@
           <span class="clock" id="clock">00:00</span>
           <div class="sb-divider"></div>
           <div class="team-block">
+            <span class="team-logo" id="homeLogoDisp">⚽</span>
             <span class="team-name" id="homeTeamDisp">Arsenal</span>
           </div>
           <span class="score" id="homeScoreDisp">2</span>
           <span class="score-sep">—</span>
           <span class="score" id="awayScoreDisp">1</span>
           <div class="team-block">
+            <span class="team-logo" id="awayLogoDisp">🔵</span>
             <span class="team-name" id="awayTeamDisp">Chelsea</span>
           </div>
           <span class="period-badge" id="periodDisp">2ND</span>
@@ -747,6 +867,24 @@
           </div>
         </div>
 
+        <!-- ── Ad image banner ── -->
+        <div class="ad-banner" id="adBanner">
+          <div class="ad-banner-bar"></div>
+          <div class="ad-banner-content">
+            <div class="ad-banner-img-mock" id="adBannerMock">
+              <div class="ad-sponsor-logo" id="adSponsorLogo">🏆</div>
+              <div class="ad-sponsor-text">
+                <span id="adSponsorName">SPONSOR NAME</span>
+                <span class="ad-sponsor-tagline" id="adSponsorTagline">OFFICIAL PARTNER</span>
+              </div>
+            </div>
+          </div>
+          <div class="ad-label">AD</div>
+          <div class="ad-progress-track">
+            <div class="ad-progress-fill" id="adProgressFill"></div>
+          </div>
+        </div>
+
       </div><!-- /canvas -->
     </div><!-- /canvas-wrap -->
 
@@ -756,6 +894,7 @@
       <div class="info-chip">Overlay pipe <span class="val">640 × 360</span></div>
       <div class="info-chip">Scorebar <span class="val">x=12 y=12 h=36</span></div>
       <div class="info-chip">Badge <span class="val">x=12 bottom=12 h=28</span></div>
+      <div class="info-chip">Ad Banner <span class="val">full-width h=22%</span></div>
       <div class="info-chip">Banner <span class="val">x=12 y=56 w=340 h=50</span></div>
     </div>
 
@@ -906,23 +1045,109 @@ function buildPlayers(){
   });
 }
 
+// ── Lineup timing (mirrors Java: 10 s total) ──────────────────────────────
+// 0.0–0.5 s  HOME intro card
+// 0.5–4.5 s  HOME formation + subs (appear at 0.5 s, fade at 3.5 s)
+// 4.0–5.0 s  transition
+// 5.0–9.5 s  AWAY formation + subs
+// 9.5–10 s   AWAY outro
+
 function showLineup(){
   lineupVisible = true;
-  buildPlayers();
-  document.getElementById('lineupOverlay').classList.add('visible');
-
-  // Animate subs table in after 2s
   clearInterval(subsInterval);
-  subsPhase = 0;
+
+  const overlay   = document.getElementById('lineupOverlay');
+  const subsTable = document.getElementById('subsTable');
+  const field     = document.getElementById('fieldWrap');
+  const homeLabel = document.getElementById('lineupHomeLabel');
+  const awayLabel = document.getElementById('lineupAwayLabel');
+
+  // Reset
+  subsTable.classList.remove('visible');
+  overlay.classList.add('visible');
+
+  // ── Phase helpers ──────────────────────────────────────────────────────
+  function showTeam(isHome) {
+    const ht = document.getElementById('homeTeam').value || 'HOME';
+    const at = document.getElementById('awayTeam').value || 'AWAY';
+    // Remove existing players
+    field.querySelectorAll('.player-node').forEach(n => n.remove());
+    // Build only the current team's players
+    const players = isHome ? HOME_FORMATION.players : AWAY_FORMATION.players;
+    const color   = isHome ? HOME_FORMATION.color   : AWAY_FORMATION.color;
+    players.forEach(p => {
+      const node = document.createElement('div');
+      node.className = 'player-node';
+      // All players attack left-to-right (x is already correct in formation data)
+      node.style.left = p.x + '%';
+      node.style.top  = p.y + '%';
+      node.innerHTML = `
+        <div class="player-circle" style="background:${color};border-color:rgba(255,255,255,0.6)">${p.n}</div>
+        <div class="player-label">${p.name.split(' ').pop()}</div>`;
+      field.appendChild(node);
+    });
+
+    // Update team label (show current team only)
+    homeLabel.style.opacity = isHome ? '1' : '0';
+    awayLabel.style.opacity = isHome ? '0' : '1';
+    if (isHome) {
+      homeLabel.innerHTML = ht.toUpperCase() + ' <span style="color:rgba(255,255,255,0.4);font-size:9px">' + HOME_FORMATION.name + '</span>';
+    } else {
+      awayLabel.innerHTML = at.toUpperCase() + ' <span style="color:rgba(255,255,255,0.4);font-size:9px">' + AWAY_FORMATION.name + '</span>';
+    }
+  }
+
+  // ── Show HOME immediately ──────────────────────────────────────────────
+  showTeam(true);
+
+  // Subs for HOME appear at 500 ms, hide at 3500 ms
   setTimeout(() => {
+    if (!lineupVisible) return;
     document.getElementById('subsTeamName').textContent =
       document.getElementById('homeTeam').value || 'HOME';
-    document.getElementById('subsTable').classList.add('visible');
-  }, 2000);
+    subsTable.classList.add('visible');
+  }, 500);
+
+  setTimeout(() => {
+    subsTable.classList.remove('visible');
+  }, 3500);
+
+  // ── Transition to AWAY at 5000 ms ─────────────────────────────────────
+  setTimeout(() => {
+    if (!lineupVisible) return;
+    // Slide-out animation on field
+    field.style.transition = 'opacity 0.4s ease';
+    field.style.opacity = '0';
+    setTimeout(() => {
+      if (!lineupVisible) return;
+      showTeam(false);
+      field.style.opacity = '1';
+    }, 400);
+  }, 4500);
+
+  // Subs for AWAY appear at 5500 ms, hide at 8500 ms
+  setTimeout(() => {
+    if (!lineupVisible) return;
+    document.getElementById('subsTeamName').textContent =
+      document.getElementById('awayTeam').value || 'AWAY';
+    subsTable.classList.add('visible');
+  }, 5500);
+
+  setTimeout(() => {
+    subsTable.classList.remove('visible');
+  }, 8500);
+
+  // ── Auto-hide at 10 s ─────────────────────────────────────────────────
+  setTimeout(() => {
+    hideLineup();
+  }, 10000);
 }
 
 function hideLineup(){
   lineupVisible = false;
+  const field = document.getElementById('fieldWrap');
+  field.style.transition = '';
+  field.style.opacity = '1';
   document.getElementById('lineupOverlay').classList.remove('visible');
   document.getElementById('subsTable').classList.remove('visible');
   clearInterval(subsInterval);
@@ -930,6 +1155,99 @@ function hideLineup(){
 
 function toggleLineup(){
   if(lineupVisible) hideLineup(); else showLineup();
+}
+
+// ── Ad banner data ─────────────────────────────────────────────────────────
+const AD_BANNERS = {
+  sponsor: {
+    bg:      'linear-gradient(90deg, rgb(10,10,30) 0%, rgb(20,10,50) 50%, rgb(10,10,30) 100%)',
+    border:  '1px solid rgba(180,140,255,0.3)',
+    logo:    '🏆',
+    logoBg:  'rgba(160,100,255,0.2)',
+    name:    'ZENITH SPORTS',
+    tagline: 'OFFICIAL MATCH SPONSOR',
+    color:   '#c8a0ff',
+    duration: 15000,
+  },
+  product: {
+    bg:      'linear-gradient(90deg, rgb(5,20,35) 0%, rgb(10,30,55) 50%, rgb(5,20,35) 100%)',
+    border:  '1px solid rgba(110,198,255,0.3)',
+    logo:    '📦',
+    logoBg:  'rgba(80,180,255,0.2)',
+    name:    'ARENA GEAR',
+    tagline: 'SHOP NOW · ARENA.TV/STORE',
+    color:   '#6ec6ff',
+    duration: 15000,
+  },
+  promo: {
+    bg:      'linear-gradient(90deg, rgb(10,25,10) 0%, rgb(15,40,15) 50%, rgb(10,25,10) 100%)',
+    border:  '1px solid rgba(168,255,120,0.3)',
+    logo:    '🎯',
+    logoBg:  'rgba(100,220,60,0.2)',
+    name:    '50% OFF MATCHDAY MERCH',
+    tagline: 'USE CODE: ARENA50 · TODAY ONLY',
+    color:   '#a8ff78',
+    duration: 15000,
+  },
+};
+
+let adBannerTimer    = null;
+let adProgressTimer  = null;
+let adBannerVisible  = false;
+
+function triggerAdBanner(type) {
+  const ad = AD_BANNERS[type];
+  if (!ad) return;
+
+  // Clear previous
+  clearTimeout(adBannerTimer);
+  clearInterval(adProgressTimer);
+
+  const el     = document.getElementById('adBanner');
+  const mock   = document.getElementById('adBannerMock');
+  const logo   = document.getElementById('adSponsorLogo');
+  const name   = document.getElementById('adSponsorName');
+  const tag    = document.getElementById('adSponsorTagline');
+  const fill   = document.getElementById('adProgressFill');
+
+  // Apply ad data
+  mock.style.background = ad.bg;
+  mock.style.border     = ad.border;
+  logo.textContent      = ad.logo;
+  logo.style.background = ad.logoBg;
+  name.textContent      = ad.name;
+  name.style.color      = ad.color;
+  tag.textContent       = ad.tagline;
+  tag.style.color       = ad.color;
+
+  // Progress bar counts down
+  fill.style.transform = 'scaleX(1)';
+  let start = Date.now();
+  clearInterval(adProgressTimer);
+  adProgressTimer = setInterval(() => {
+    let p = 1 - (Date.now() - start) / ad.duration;
+    if (p <= 0) { clearInterval(adProgressTimer); p = 0; }
+    fill.style.transform = 'scaleX(' + p + ')';
+  }, 80);
+
+  // Re-trigger slide animation
+  el.style.animation = 'none';
+  el.classList.remove('visible');
+  requestAnimationFrame(() => {
+    el.style.animation = '';
+    el.classList.add('visible');
+  });
+
+  adBannerVisible = true;
+  adBannerTimer = setTimeout(hideAdBanner, ad.duration);
+}
+
+function hideAdBanner() {
+  clearTimeout(adBannerTimer);
+  clearInterval(adProgressTimer);
+  document.getElementById('adBanner').classList.remove('visible');
+  document.getElementById('adProgressFill').style.transform = 'scaleX(0)';
+  adBannerVisible = false;
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

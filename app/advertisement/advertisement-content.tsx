@@ -8,18 +8,25 @@ import {
   Clapperboard, Clock3, Megaphone, RadioTower, Send, UploadCloud, Video, XCircle,
   BarChart3, TrendingUp, Eye, Users, Wifi, Youtube, Facebook, MonitorPlay, Activity,
   Zap, Target, ArrowUpRight, ArrowDownRight, Globe, Loader2, Trash2, RefreshCw,
-  Image as ImageIcon, Info,
+  Image as ImageIcon, Info, Gavel, MapPin, Trophy, X as XIcon,
 } from 'lucide-react';
 import { PageShell } from '@/components/ui';
 import {
-  UserPrefs, getMatchesByAuthorId,
+  UserPrefs, getMatchesByAuthorId, isBroadcaster, getClubs,
   getAdvertisements, createAdvertisement, deleteAdvertisement,
-  initiateAdPayment,
-  type MatchData, type AdvertisementData, type AdAnalyticsData,
+  pollPaymentUntilSettled,
+  getBidEligibleMatches, getBidBasePrice, createBidCampaign, getMyBids,
+  type MatchData, type AdvertisementData, type AdAnalyticsData, type Club,
+  type BidPeriod, type BidEntry, type MatchBidData,
 } from '@/lib/api';
 
+const isValidKenyanPhone = (phone: string): boolean => {
+  const cleaned = phone.replace(/\D/g, '');
+  return /^254[0-9]{9}$/.test(cleaned) || /^0[79][0-9]{8}$/.test(cleaned);
+};
+
 type Platform = 'youtube' | 'facebook' | 'rtmp_custom';
-type Tab = 'campaign' | 'analytics';
+type Tab = 'campaign' | 'bid' | 'analytics';
 type MediaType = 'video' | 'image';
 type AdPosition = 'Before 1ST' | 'Half Time' | 'After 2ND' | 'Before Extra Time';
 
@@ -66,16 +73,17 @@ function buildCampaignsFromMatches(matches: MatchData[]): AdCampaign[] {
   return matches.map((m, i) => {
     const seed = (m.id?.charCodeAt(0) ?? i + 1) * 137 + i;
     const rand = (min: number, max: number) => Math.floor(((seed * (i + 3) * 31) % (max - min + 1)) + min);
-    const ytV = m.viewers ? Math.floor(m.viewers * 0.55) : rand(1200, 8000);
-    const fbV = m.viewers ? Math.floor(m.viewers * 0.35) : rand(800, 5000);
-    const rtV = m.viewers ? Math.floor(m.viewers * 0.1)  : rand(200, 1500);
+    const ytV = m.views ? Math.floor(m.views * 0.55) : rand(1200, 8000);
+    const fbV = m.views ? Math.floor(m.views * 0.35) : rand(800, 5000);
+    const rtV = m.views ? Math.floor(m.views * 0.1)  : rand(200, 1500);
     const totalV = ytV + fbV + rtV;
     const imp = Math.floor(totalV * rand(2, 4));
     const clk = Math.floor(imp * (rand(2, 8) / 100));
     return {
       id: `camp_${m.id}`, matchId: m.id,
       matchLabel: `${m.homeTeam?.name ?? 'Home'} vs ${m.awayTeam?.name ?? 'Away'}`,
-      league: m.league, date: m.date,
+      league: m.league.id,
+      date: m.created_at?.toString()||"",
       position: adPositions[i % adPositions.length],
       duration: adDurations[i % adDurations.length],
       status: m.status === 'live' ? 'live' : m.status === 'scheduled' ? 'scheduled' : 'completed',
@@ -132,6 +140,8 @@ export default function AdvertisementPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [mpesaPhone, setMpesaPhone] = useState('');
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -240,6 +250,7 @@ export default function AdvertisementPage() {
   const submitAdvertisement = async () => {
     if (!isMediaValid || (!videoFile && !imageFile)) { showNotice('error', 'Please upload a valid creative first.'); return; }
     if (!adTitle.trim()) { showNotice('error', 'Please enter an advertisement title.'); return; }
+    if (!isValidKenyanPhone(mpesaPhone)) { showNotice('error', 'Enter a valid M-Pesa phone (e.g., 0712 345 678).'); return; }
     setSubmitting(true);
     try {
       const form = new FormData();
@@ -249,12 +260,30 @@ export default function AdvertisementPage() {
       form.append('duration', mediaType === 'video' ? String(selectedDuration) : '10');
       if (mediaType === 'image' && adAltText.trim()) form.append('alt_text', adAltText.trim());
       form.append('period', selectedPosition);
-      form.append('status', 'paused');
+      form.append('currency', 'KES');
+      form.append('method', 'mpesa');
+      form.append('details[phone]', mpesaPhone);
       const ad = await createAdvertisement(form);
-      await initiateAdPayment(ad.id, { amount_kes: Math.round(price), payment_method: 'mpesa' });
-      showNotice('success', 'Advertisement submitted! Proceed to payment to activate it.');
+      showNotice('success', `Advertisement created for KES ${ad.price ?? '—'}. Check your phone for the M-Pesa prompt.`);
       setAdTitle(''); setAdAltText(''); resetMedia();
       await loadData();
+
+      if (ad.payment_id) {
+        setAwaitingPayment(true);
+        try {
+          const settled = await pollPaymentUntilSettled(ad.payment_id);
+          if (settled.status === 'completed') {
+            showNotice('success', 'Payment confirmed — your campaign is now active.');
+          } else {
+            showNotice('error', 'Payment was not completed. The campaign stays paused until it is paid.');
+          }
+        } catch {
+          showNotice('error', 'Still waiting on M-Pesa confirmation — check your Advertisements list shortly.');
+        } finally {
+          setAwaitingPayment(false);
+          await loadData();
+        }
+      }
     } catch (e: any) {
       showNotice('error', e.message || 'Submission failed. Please try again.');
     } finally { setSubmitting(false); }
@@ -285,6 +314,7 @@ export default function AdvertisementPage() {
         <div className="mb-5 flex w-full gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-1 sm:w-fit">
           {([
             { key: 'campaign',  label: 'Campaign Builder', icon: <Megaphone size={15} /> },
+            { key: 'bid',       label: 'Bid Tab',           icon: <Gavel size={15} /> },
             { key: 'analytics', label: 'Analytics',        icon: <BarChart3 size={15} /> },
           ] as { key: Tab; label: string; icon: ReactNode }[]).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
@@ -310,10 +340,18 @@ export default function AdvertisementPage() {
                 imageDimensions={imageDimensions}
                 isMediaValid={isMediaValid}
                 inputRef={inputRef} price={price} submitting={submitting}
+                mpesaPhone={mpesaPhone} setMpesaPhone={setMpesaPhone}
+                awaitingPayment={awaitingPayment}
                 onMediaPick={handleMediaPick} onResetMedia={() => inputRef.current?.click()}
                 onSubmit={submitAdvertisement}
               />
               <input ref={inputRef} type="file" accept="video/*,image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => handleMediaPick(e.target.files?.[0])} />
+            </motion.div>
+          )}
+
+          {tab === 'bid' && (
+            <motion.div key="bid" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
+              <BidTab onNotice={showNotice} />
             </motion.div>
           )}
 
@@ -358,6 +396,7 @@ function CampaignBuilder({
   mediaFileName, videoUrl, imageUrl,
   videoDurationSeconds, imageDimensions,
   isMediaValid, inputRef, price, submitting,
+  mpesaPhone, setMpesaPhone, awaitingPayment,
   onMediaPick, onResetMedia, onSubmit,
 }: {
   adTitle: string; setAdTitle: (v: string) => void;
@@ -371,6 +410,7 @@ function CampaignBuilder({
   isMediaValid: boolean;
   inputRef: React.RefObject<HTMLInputElement | null>;
   price: number; submitting: boolean;
+  mpesaPhone: string; setMpesaPhone: (v: string) => void; awaitingPayment: boolean;
   onMediaPick: (f?: File) => void; onResetMedia: () => void; onSubmit: () => void;
 }) {
   const positionInfo = positionPricing[selectedPosition];
@@ -389,6 +429,13 @@ function CampaignBuilder({
             <label className="block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)] mb-2">Advertisement Title *</label>
             <input value={adTitle} onChange={e => setAdTitle(e.target.value)} placeholder="e.g. Safaricom Half-Time Spot"
               className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-[15px] text-[var(--text)] outline-none focus:border-green-500/60 transition-colors" />
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)] mb-2">M-Pesa Phone *</label>
+            <input value={mpesaPhone} onChange={e => setMpesaPhone(e.target.value)} placeholder="0712 345 678"
+              className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-[15px] text-[var(--text)] outline-none focus:border-green-500/60 transition-colors" />
+            <p className="mt-1.5 text-[11px] text-[var(--muted)]">The STK push to pay for this campaign will be sent here.</p>
           </div>
 
           {mediaType === 'image' && (
@@ -518,18 +565,20 @@ function CampaignBuilder({
           </div>
           <div className="my-4 h-px bg-[var(--surface3)]" />
           <div className="flex items-end justify-between gap-3">
-            <div className="broadcast-label">Total</div>
+            <div className="broadcast-label">Estimated total</div>
             <div className="text-[22px] font-semibold leading-none text-green-400 sm:text-[24px]">KES {price.toLocaleString()}</div>
           </div>
-          <button onClick={onSubmit} disabled={!isMediaValid || submitting || !adTitle.trim()}
+          <button onClick={onSubmit} disabled={!isMediaValid || submitting || awaitingPayment || !adTitle.trim() || !isValidKenyanPhone(mpesaPhone)}
             className={['mt-5 w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 font-semibold transition',
-              isMediaValid && !submitting && adTitle.trim() ? 'bg-green-500 text-white hover:bg-green-400' : 'cursor-not-allowed bg-green-500/60 text-[var(--text)]/80'].join(' ')}>
+              isMediaValid && !submitting && !awaitingPayment && adTitle.trim() && isValidKenyanPhone(mpesaPhone) ? 'bg-green-500 text-white hover:bg-green-400' : 'cursor-not-allowed bg-green-500/60 text-[var(--text)]/80'].join(' ')}>
             {submitting
               ? <><Loader2 size={16} className="animate-spin" /> Submitting…</>
+              : awaitingPayment
+              ? <><Loader2 size={16} className="animate-spin" /> Waiting for M-Pesa…</>
               : <><Send size={16} />{isMediaValid ? 'Submit & Pay' : `Upload ${mediaType} first`}</>}
           </button>
           {isMediaValid && adTitle.trim() && (
-            <p className="mt-2 text-xs text-[var(--muted)] text-center">You'll be redirected to complete payment.</p>
+            <p className="mt-2 text-xs text-[var(--muted)] text-center">An STK push will be sent to your phone to complete payment.</p>
           )}
         </section>
 
@@ -539,7 +588,7 @@ function CampaignBuilder({
           <WorkflowStep label="Campaign settings"           active />
           <WorkflowStep label={`Creative (${mediaType})`}  active={isMediaValid} />
           <WorkflowStep label="Pricing confirmation"        active />
-          <WorkflowStep label="Submit & pay"                active={isMediaValid && !!adTitle.trim()} />
+          <WorkflowStep label="Submit & pay"                active={isMediaValid && !!adTitle.trim() && isValidKenyanPhone(mpesaPhone)} />
           <WorkflowStep label="Ready for ad injector"       active={false} />
         </section>
 
@@ -964,4 +1013,332 @@ function StatusBadgeAd({ status }: { status: AdCampaign['status'] }) {
   const cfg   = { live: 'bg-red-500/10 text-red-400', scheduled: 'bg-blue-500/10 text-blue-400', upcoming: 'bg-yellow-400/10 text-yellow-400', completed: 'bg-green-500/10 text-green-400' }[status];
   const label = { live: '● LIVE', scheduled: 'SCHEDULED', upcoming: 'UPCOMING', completed: 'COMPLETED' }[status];
   return <span className={['rounded-md px-2.5 py-1.5 text-xs font-semibold uppercase tracking-[.04em]', cfg].join(' ')}>{label}</span>;
+}
+
+// ─── Bid Tab ────────────────────────────────────────────────────────────────
+const PERIOD_LABEL: Record<BidPeriod, string> = {
+  before_match: 'Before match',
+  halftime:     'Half-time',
+  fulltime:     'Full-time',
+};
+
+type BasketEntry = BidEntry & { key: string; matchLabel: string };
+
+function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: string) => void }) {
+  // Filters
+  const [dateFilter, setDateFilter] = useState('');
+  const [stadiumFilter, setStadiumFilter] = useState('');
+  const [clubFilter, setClubFilter] = useState('');
+  const [clubs, setClubs] = useState<Club[]>([]);
+
+  // Matches + base prices
+  const [matches, setMatches] = useState<MatchData[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(true);
+  const [basePrices, setBasePrices] = useState<Record<BidPeriod, number>>({ before_match: 0, halftime: 0, fulltime: 0 });
+
+  // Per-card bid amount inputs, keyed by `${matchId}:${period}`
+  const [amountInputs, setAmountInputs] = useState<Record<string, string>>({});
+
+  // Basket
+  const [basket, setBasket] = useState<BasketEntry[]>([]);
+
+  // Campaign fields
+  const [title, setTitle] = useState('');
+  const [phone, setPhone] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [selfAdvertise, setSelfAdvertise] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [awaitingPayment, setAwaitingPayment] = useState(false);
+
+  // My bids
+  const [myBids, setMyBids] = useState<MatchBidData[]>([]);
+  const [loadingMyBids, setLoadingMyBids] = useState(true);
+
+  useEffect(() => {
+    getClubs().then(setClubs).catch(() => setClubs([]));
+    Promise.all([getBidBasePrice('before_match'), getBidBasePrice('halftime'), getBidBasePrice('fulltime')])
+      .then(([b, h, f]) => setBasePrices({ before_match: b, halftime: h, fulltime: f }))
+      .catch(() => {});
+    refreshMyBids();
+  }, []);
+
+  const refreshMyBids = () => {
+    setLoadingMyBids(true);
+    getMyBids().then(setMyBids).catch(() => setMyBids([])).finally(() => setLoadingMyBids(false));
+  };
+
+  useEffect(() => {
+    setLoadingMatches(true);
+    const handle = setTimeout(() => {
+      getBidEligibleMatches({
+        date: dateFilter || undefined,
+        stadium: stadiumFilter.trim() || undefined,
+        club_id: clubFilter || undefined,
+      }).then(setMatches).catch(() => setMatches([])).finally(() => setLoadingMatches(false));
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [dateFilter, stadiumFilter, clubFilter]);
+
+  const addToBasket = (match: MatchData, period: BidPeriod) => {
+    const key = `${match.id}:${period}`;
+    const raw = amountInputs[key];
+    const amount = Number(raw);
+    const base = basePrices[period];
+    if (!amount || amount < base) {
+      onNotice('error', `Bid for ${PERIOD_LABEL[period]} must be at least KES ${base.toLocaleString()}.`);
+      return;
+    }
+    if (basket.some(b => b.key === key)) {
+      onNotice('error', 'You already added a bid for this match and period.');
+      return;
+    }
+    setBasket(prev => [...prev, {
+      key, match_id: match.id, period, amount,
+      matchLabel: `${match.homeTeam?.name ?? '—'} vs ${match.awayTeam?.name ?? '—'}`,
+    }]);
+    setAmountInputs(prev => ({ ...prev, [key]: '' }));
+  };
+
+  const removeFromBasket = (key: string) => setBasket(prev => prev.filter(b => b.key !== key));
+
+  const total = basket.reduce((s, b) => s + b.amount, 0);
+
+  const handleFilePick = (f?: File) => {
+    if (!f) return;
+    if (!f.type.startsWith('image/')) { onNotice('error', 'Bid-slot ads must be images.'); return; }
+    setFile(f);
+    setImagePreview(URL.createObjectURL(f));
+  };
+
+  const handleSubmit = async () => {
+    if (!title.trim()) { onNotice('error', 'Please enter a title for this bid campaign.'); return; }
+    if (!file) { onNotice('error', 'Please upload an image for this bid campaign.'); return; }
+    if (!isValidKenyanPhone(phone)) { onNotice('error', 'Enter a valid M-Pesa phone (e.g., 0712 345 678).'); return; }
+    if (basket.length === 0) { onNotice('error', 'Add at least one match bid first.'); return; }
+
+    setSubmitting(true);
+    try {
+      const result = await createBidCampaign({
+        title: title.trim(),
+        file,
+        bids: basket.map(({ match_id, period, amount }) => ({ match_id, period, amount })),
+        details: { phone },
+        self_advertise: selfAdvertise,
+      });
+      onNotice('success', `Bid campaign submitted for KES ${result.total.toLocaleString()}. Check your phone for the M-Pesa prompt.`);
+      setBasket([]); setTitle(''); setFile(null); setImagePreview(null);
+
+      setAwaitingPayment(true);
+      try {
+        const settled = await pollPaymentUntilSettled(result.payment_id);
+        onNotice(
+          settled.status === 'completed' ? 'success' : 'error',
+          settled.status === 'completed'
+            ? 'Payment confirmed — your bids are now competing for their slots.'
+            : 'Payment was not completed. Your bids will not be entered.',
+        );
+      } catch {
+        onNotice('error', 'Still waiting on M-Pesa confirmation — check My Bids shortly.');
+      } finally {
+        setAwaitingPayment(false);
+        refreshMyBids();
+      }
+    } catch (e: any) {
+      onNotice('error', e.message || 'Could not submit bid campaign.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const statusBadge = (status: MatchBidData['status']) => {
+    const cfg: Record<MatchBidData['status'], string> = {
+      pending_payment: 'bg-yellow-500/15 text-yellow-500',
+      pending:         'bg-blue-500/15 text-blue-400',
+      won:             'bg-green-500/15 text-green-400',
+      lost:            'bg-red-500/15 text-red-400',
+      refunded:        'bg-[var(--surface3)] text-[var(--muted)]',
+    };
+    const label: Record<MatchBidData['status'], string> = {
+      pending_payment: 'Awaiting payment', pending: 'Awaiting result', won: 'Won slot', lost: 'Outbid', refunded: 'Refunded',
+    };
+    return <span className={['rounded-md px-2 py-1 text-[11px] font-semibold', cfg[status]].join(' ')}>{label[status]}</span>;
+  };
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      <div className="flex flex-col gap-4">
+        {/* Filters */}
+        <section className="broadcast-card rounded-lg p-4">
+          <SectionTitle icon={<Gavel size={19} />} title="Bid on match ad slots" tone="blue" />
+          <p className="mb-3 text-xs text-[var(--muted)]">
+            5 ad slots exist per period (before match, half-time, full-time) on each match below. Highest bids win. Matches are ranked by viewer traction.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)}
+              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60" />
+            <div className="relative">
+              <MapPin size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+              <input value={stadiumFilter} onChange={e => setStadiumFilter(e.target.value)} placeholder="Stadium / ground"
+                className="h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] pl-8 pr-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60" />
+            </div>
+            <select value={clubFilter} onChange={e => setClubFilter(e.target.value)}
+              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60">
+              <option value="">All clubs</option>
+              {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </section>
+
+        {/* Matches */}
+        {loadingMatches ? (
+          <div className="broadcast-card rounded-lg p-10 text-center text-sm text-[var(--muted)]">Loading matches…</div>
+        ) : matches.length === 0 ? (
+          <div className="broadcast-card rounded-lg p-10 text-center text-sm text-[var(--muted)]">No matches match your filters.</div>
+        ) : (
+          matches.map((m, idx) => (
+            <div key={m.id} className="broadcast-card rounded-lg p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-green-400">
+                    <Trophy size={12} /> Rank #{idx + 1} by traction
+                  </div>
+                  <div className="mt-1 text-[15px] font-semibold text-[var(--text)]">
+                    {m.homeTeam?.name ?? '—'} <span className="text-[var(--muted)]">vs</span> {m.awayTeam?.name ?? '—'}
+                  </div>
+                  <div className="mt-0.5 text-xs text-[var(--muted)]">
+                    {m.date}{m.time ? ` · ${m.time}` : ''}{m.stadium ? ` · ${m.stadium}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {(['before_match', 'halftime', 'fulltime'] as BidPeriod[]).map(period => {
+                  const key = `${m.id}:${period}`;
+                  const inBasket = basket.some(b => b.key === key);
+                  return (
+                    <div key={period} className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-[.04em] text-[var(--muted)]">{PERIOD_LABEL[period]}</div>
+                      <div className="mt-0.5 text-xs text-[var(--muted)]">Base KES {basePrices[period].toLocaleString()}</div>
+                      {inBasket ? (
+                        <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-green-400">
+                          <CheckCircle2 size={13} /> Added
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex items-center gap-1.5">
+                          <input
+                            type="number" min={basePrices[period]}
+                            value={amountInputs[key] ?? ''}
+                            onChange={e => setAmountInputs(prev => ({ ...prev, [key]: e.target.value }))}
+                            placeholder={String(basePrices[period])}
+                            className="h-8 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--field-bg)] px-2 text-xs text-[var(--text)] outline-none focus:border-green-500/60"
+                          />
+                          <button onClick={() => addToBasket(m, period)}
+                            className="h-8 shrink-0 rounded-md bg-green-500 px-2 text-xs font-semibold text-black hover:bg-green-400">
+                            Bid
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
+
+        {/* My bids */}
+        <section className="broadcast-card rounded-lg p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <SectionTitle icon={<Target size={19} />} title="My bids" tone="blue" />
+            <button onClick={refreshMyBids} className="text-[var(--muted)] hover:text-[var(--text)]"><RefreshCw size={14} /></button>
+          </div>
+          {loadingMyBids ? (
+            <div className="py-6 text-center text-sm text-[var(--muted)]">Loading…</div>
+          ) : myBids.length === 0 ? (
+            <div className="py-6 text-center text-sm text-[var(--muted)]">You haven't placed any bids yet.</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {myBids.map(b => (
+                <div key={b.id} className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--surface2)] px-3 py-2.5">
+                  <div>
+                    <div className="text-sm font-medium text-[var(--text)]">
+                      {b.match?.homeTeam?.name ?? '—'} vs {b.match?.awayTeam?.name ?? '—'}
+                    </div>
+                    <div className="text-xs text-[var(--muted)]">
+                      {PERIOD_LABEL[b.period]} · KES {b.amount.toLocaleString()}{b.slot_rank ? ` · Slot #${b.slot_rank}` : ''}
+                    </div>
+                  </div>
+                  {statusBadge(b.status)}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* Basket / checkout */}
+      <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:self-start">
+        <section className="broadcast-card rounded-lg p-4">
+          <SectionTitle icon={<Gavel size={19} />} title="Bid basket" tone="green" />
+          {basket.length === 0 ? (
+            <p className="py-4 text-center text-xs text-[var(--muted)]">Add bids from the matches on the left.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {basket.map(b => (
+                <div key={b.key} className="flex items-center justify-between rounded-md bg-[var(--surface2)] px-2.5 py-2">
+                  <div>
+                    <div className="text-xs font-medium text-[var(--text)]">{b.matchLabel}</div>
+                    <div className="text-[11px] text-[var(--muted)]">{PERIOD_LABEL[b.period]} · KES {b.amount.toLocaleString()}</div>
+                  </div>
+                  <button onClick={() => removeFromBasket(b.key)} className="text-[var(--muted)] hover:text-red-400"><XIcon size={14} /></button>
+                </div>
+              ))}
+              <div className="my-2 h-px bg-[var(--surface3)]" />
+              <div className="flex items-center justify-between text-sm font-semibold text-[var(--text)]">
+                <span>Total</span><span className="text-green-400">KES {total.toLocaleString()}</span>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="broadcast-card rounded-lg p-4">
+          <SectionTitle icon={<UploadCloud size={19} />} title="Campaign creative" tone="blue" />
+          <label className="mt-2 block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)]">Title *</label>
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Derby Day Half-time Spot"
+            className="mt-1.5 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60" />
+
+          <label className="mt-3 block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)]">Image (image only for bid slots) *</label>
+          <label className="mt-1.5 flex h-24 cursor-pointer items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--field-bg)] text-xs text-[var(--muted)] hover:border-green-500/50">
+            {imagePreview ? <img src={imagePreview} alt="" className="h-full rounded-lg object-contain" /> : <span className="flex items-center gap-1.5"><ImageIcon size={15} /> Upload image</span>}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={e => handleFilePick(e.target.files?.[0])} />
+          </label>
+
+          <label className="mt-3 block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)]">M-Pesa phone *</label>
+          <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="0712 345 678"
+            className="mt-1.5 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60" />
+
+          {isBroadcaster() && (
+            <label className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
+              <input type="checkbox" checked={selfAdvertise} onChange={e => setSelfAdvertise(e.target.checked)} />
+              I'm advertising my own match (self-advertise)
+            </label>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || awaitingPayment || basket.length === 0}
+            className={['mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition',
+              !submitting && !awaitingPayment && basket.length > 0 ? 'bg-green-500 text-black hover:bg-green-400' : 'cursor-not-allowed bg-green-500/60 text-black/70'].join(' ')}
+          >
+            {submitting
+              ? <><Loader2 size={16} className="animate-spin" /> Submitting…</>
+              : awaitingPayment
+              ? <><Loader2 size={16} className="animate-spin" /> Waiting for M-Pesa…</>
+              : <><Send size={16} /> Submit {basket.length > 0 ? `& Pay KES ${total.toLocaleString()}` : 'bid campaign'}</>}
+          </button>
+        </section>
+      </div>
+    </div>
+  );
 }

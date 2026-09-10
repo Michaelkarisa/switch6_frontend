@@ -122,7 +122,7 @@ export default function AdminMatchesPage() {
               onChange={e => setFilter(f => ({ ...f, status: e.target.value, page: 1 }))}
               className="h-9 px-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface2)] text-[13px] text-[color:var(--text)] outline-none cursor-pointer">
               <option value="">All statuses</option>
-              {['scheduled','live','finished','cancelled'].map(s => <option key={s} value={s}>{s}</option>)}
+              {['scheduled','live','completed','cancelled'].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
           <input type="date" value={filter.from} onChange={e => setFilter(f => ({ ...f, from: e.target.value, page: 1 }))}
@@ -165,7 +165,7 @@ export default function AdminMatchesPage() {
                   <tr key={m.id} className={`border-b border-[color:var(--border)] last:border-0 hover:bg-[color:var(--surface2)] transition-colors ${tab === 'trash' ? 'opacity-70' : ''}`}>
                     <td className="px-4 py-3">
                       <div className="font-medium text-[color:var(--text)]">
-                        {m.homeTeam?.name ?? '—'} vs {m.awayTeam?.name ?? '—'}
+                        {m.home_club?.name ?? '—'} vs {m.away_club?.name ?? '—'}
                       </div>
                       <div className="text-[11px] text-[color:var(--muted)] font-mono">{m.id.slice(0, 8)}…</div>
                     </td>
@@ -173,10 +173,10 @@ export default function AdminMatchesPage() {
                       {typeof m.league === 'object' && m.league !== null
                         ? (m.league as { leaguename?: string; name?: string }).leaguename
                           ?? (m.league as { name?: string }).name
-                          ?? '—'
-                        : (m.league as string) ?? '—'}
+                          ?? 'Freindly'
+                        : (m.league as string) ?? 'Freindly'}
                     </td>
-                    <td className="px-4 py-3 text-[color:var(--muted)]">{m.date ?? '—'}</td>
+                    <td className="px-4 py-3 text-[color:var(--muted)]">{new Date(m.match_date??'').toLocaleDateString() ?? '—'} . {new Date(m.match_date??'').toLocaleTimeString()}</td>
                     <td className="px-4 py-3">
                       {tab === 'trash'
                         ? <span className="px-2 py-px rounded-full text-[10px] font-bold uppercase border border-orange-500/30 bg-orange-500/10 text-orange-400">Deleted</span>

@@ -25,6 +25,12 @@ const ROLES_OPTIONS = [
     features: ['Upload video / image ads', 'Choose match slots & periods', 'Track impressions & reach', 'M-Pesa payment integration'],
   },
 ];
+const TYPE_OPTIONS = [
+  "Football",
+  "Volleyball",
+  "Basketball",
+  "Rugby",
+];
 
 export default function RegisterPage() {
   const router   = useRouter();
@@ -36,6 +42,7 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [role,     setRole]     = useState<string>(ROLES.BROADCASTER);
+  const [game_type,     setType]     = useState('Football');
   const [agreed,   setAgreed]   = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
@@ -86,7 +93,7 @@ export default function RegisterPage() {
     if (!validate()) return;
     setLoading(true); setError(''); setSuccess('');
     try {
-      const user = await registerUser({ name, email, phone, password, role });
+      const user = await registerUser({ name, email, phone, password, role, game_type });
       UserPrefs.save(user);
       if (user.role) setRoleCookie(user.role);
       const dest = role === ROLES.ADVERTISER ? '/advertisement' : '/dashboard';
@@ -110,7 +117,7 @@ export default function RegisterPage() {
       <div className="reg-mobile-bar hidden items-center justify-between px-4 py-[10px] border-b border-[var(--border)] bg-[var(--topbar-bg)] backdrop-blur-xl sticky top-0 z-50">
         <div className="flex items-center gap-[10px]">
           <span className="grid place-items-center rounded-[10px] w-8 h-8 shrink-0 bg-gradient-to-br from-blue-500 to-green-500">
-            <Radio size={15} color="#fff" strokeWidth={2} />
+            <img src={'/ic_launcher.png'} alt=''/>
           </span>
           <div>
             <div className="font-semibold text-sm text-[var(--text)] leading-tight">Switch6</div>
@@ -130,7 +137,7 @@ export default function RegisterPage() {
             {/* Logo */}
             <Link href="/" className="reg-logo-desktop hidden items-center gap-3 mb-7 no-underline w-fit">
               <span className="grid place-items-center rounded-xl w-10 h-10 shrink-0 bg-gradient-to-br from-blue-500 to-green-500">
-                <Radio size={19} color="#fff" strokeWidth={2} />
+                <img src={'/ic_launcher.png'} alt=''/>
               </span>
               <span>
                 <strong className="block text-[17px] font-semibold text-[var(--text)] tracking-tight">Switch6</strong>
@@ -203,7 +210,10 @@ export default function RegisterPage() {
                   </div>
                 )}
               </div>
-
+              {selectedRole?.key == "broadcaster"&&(
+              <div>
+                   <SelectField label="Genre"  value={game_type} options={TYPE_OPTIONS} onChange={(v: string) => setType(v)} />
+              </div>)}
               {/* Name + Email */}
               <div className="reg-two-col grid grid-cols-2 gap-3.5">
                 <div>
@@ -233,7 +243,7 @@ export default function RegisterPage() {
                 </div>
                 {errs.phone && <p className="mt-1.5 text-xs text-[var(--red)]">{errs.phone}</p>}
               </div>
-
+             
               {/* Password */}
               <div>
                 <label className="block text-[11px] font-semibold text-[var(--muted)] tracking-[.05em] uppercase mb-2">Password</label>
@@ -330,7 +340,7 @@ export default function RegisterPage() {
               <span className="bg-gradient-to-r from-green-500 to-blue-400 bg-clip-text text-transparent">broadcast-ready.</span>
             </h2>
             <p className="text-[15px] text-[var(--muted)] leading-[1.65] max-w-[420px]">
-              Three roles, one platform. Broadcasters run matches and streams. Advertisers run campaigns and track ROI. Admins manage everything.
+              Two roles, one platform. Broadcasters run matches and streams. Advertisers run campaigns and track ROI.
             </p>
           </div>
 
@@ -367,6 +377,18 @@ export default function RegisterPage() {
           .reg-right-panel{display:flex!important}
         }
       `}</style>
+    </div>
+  );
+}
+
+function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1.5 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <span className="text-[13px] text-[color:var(--text)] sm:min-w-[120px] sm:text-[14px]">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        className="h-9 w-full rounded-md border border-[color:var(--border)] bg-[color:var(--field-bg)] px-2.5 sm:max-w-[320px]">
+        {options.map((o: string) => <option key={o} value={o}>{o}</option>)}
+      </select>
     </div>
   );
 }

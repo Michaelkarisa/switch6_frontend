@@ -127,7 +127,7 @@ export default function AdminSystemPage() {
               {Object.entries(health.database).map(([k, v]) => (
                 <div key={k} className="flex items-center justify-between py-1.5 border-b border-[color:var(--border)] last:border-0">
                   <span className="text-[13px] text-[color:var(--muted)] capitalize">{k.replaceAll('_', ' ')}</span>
-                  <span className="text-[13px] font-semibold text-[color:var(--text)]">{String(v)}</span>
+                  <span className="text-[13px] font-semibold text-[color:var(--text)]">{k=="test_query"?String(v.test||""):String(v)}</span>
                 </div>
               ))}
             </div>

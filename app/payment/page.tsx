@@ -7,13 +7,15 @@ import { useRoleGuard } from '@/lib/auth';
 import {
   UserPrefs, isAdvertiser, isAdmin, getPlans, subscribeToPlan,
   getCurrentSubscription, getSubscriptionHistory, cancelSubscription,
-  getMyAdPayments, confirmAdPayment, failAdPayment, roleDashboard,
-  type PlanData, type SubscriptionData, type AdPaymentData, ROLES,
+  getMyPayments, confirmAdPayment, failAdPayment, roleDashboard,
+  pollPaymentUntilSettled,
+  type PlanData, type SubscriptionData, type PaymentData, ROLES,
 } from '@/lib/api';
 import {
   Smartphone, CreditCard, X, Lock, CheckCircle2, Loader2,
   AlertCircle, Calendar, Clock, ShieldCheck,
   RefreshCw, ChevronRight, Zap,
+  BoxSelect,
 } from 'lucide-react';
 
 type PayMethod = 'mpesa' | 'card';
@@ -65,6 +67,14 @@ export default function PaymentPage() {
   );
 }
 
+const qualityPrice: Record<number,number> = {
+  480: 0,
+  720: 100,
+  1080: 200,
+  2160: 300,
+  2160: 400,
+}
+ 
 // ── Inner Component ─────────────────────────────────────
 function PaymentPageInner() {
   useRoleGuard([ROLES.BROADCASTER, ROLES.ADVERTISER, ROLES.ADMIN, ROLES.SUPERADMIN]);
@@ -77,13 +87,13 @@ function PaymentPageInner() {
   const [plans, setPlans] = useState<PlanData[]>([]);
   const [plansLoading, setPlansLoading] = useState(true);
   const [selectedSlug, setSelectedSlug] = useState('pro');
-
+  const [selectedQuality, setSelectedQuality] = useState<number>(480);
   const [currentSub, setCurrentSub] = useState<SubscriptionData | null>(null);
   const [subHistory, setSubHistory] = useState<SubscriptionData[]>([]);
   const [subLoading, setSubLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const [adPayments, setAdPayments] = useState<AdPaymentData[]>([]);
+  const [adPayments, setAdPayments] = useState<PaymentData[]>([]);
   const [adPaymentsLoading, setAdPaymentsLoading] = useState(false);
   const [adPayPage, setAdPayPage] = useState(1);
   const AD_PAY_PAGE_SIZE = 10;
@@ -143,7 +153,9 @@ function PaymentPageInner() {
   const loadAdPayments = useCallback(async () => {
     setAdPaymentsLoading(true);
     try {
-      setAdPayments(await getMyAdPayments());
+      const response = await getMyPayments();
+      setAdPayments(response);
+     // console.log("MMMM:",response);
     } catch (err: any) {
       console.error('Failed to load ad payments:', err);
     } finally {
@@ -154,6 +166,7 @@ function PaymentPageInner() {
   useEffect(() => {
     const user = UserPrefs.get();
     if (!user) { router.replace('/login'); return; }
+    console.log('plans quality price', qualityPrice[selectedQuality]);
     if (!advertiserOnly) { loadPlans(); loadSubscription(); }
     loadAdPayments();
   }, [loadPlans, loadSubscription, loadAdPayments, router, advertiserOnly]);
@@ -175,7 +188,7 @@ function PaymentPageInner() {
     setMpesaPhone(''); setMpesaError('');
     setCardName(''); setCardNum(''); setCardExp(''); setCardCvc(''); setCardError('');
     setProcessing(false);
-    setPayStep(selectedPlan.price_kes === 0 ? 'free' : 'method');
+    setPayStep(selectedPlan.price === 0 ? 'free' : 'method');
     setDialogOpen(true);
   };
 
@@ -198,7 +211,7 @@ function PaymentPageInner() {
 
   const finishPayment = async (txCode: string) => {
     const pendingAdPay = adPayments.find(p => p.status === 'pending');
-    if (pendingAdPay) await confirmAdPayment(pendingAdPay.id, txCode);
+   // if (pendingAdPay) await confirmAdPayment(pendingAdPay.id, txCode);
     await Promise.all([loadSubscription(), loadAdPayments()]);
     setPayStep('success');
   };
@@ -210,9 +223,25 @@ function PaymentPageInner() {
     }
     setMpesaError(''); setDialogError(''); setProcessing(true); setPayStep('processing');
     try {
-      await subscribeToPlan(selectedPlan.id);
-      await delay(3000);
-      await finishPayment(`MPESA${Date.now()}`);
+      const paymentDetails={
+        phone:mpesaPhone
+      }
+      const subscription = await subscribeToPlan(selectedPlan.id,selectedQuality,paymentDetails,"mpesa");
+
+      if (!subscription.payment_id) {
+        throw new Error('Could not start the payment. Please try again.');
+      }
+
+      // Poll the real payment status (driven by the M-Pesa callback) instead
+      // of assuming success — the customer might cancel or fail the STK
+      // prompt on their phone.
+      const settled = await pollPaymentUntilSettled(subscription.payment_id);
+
+      if (settled.status === 'completed') {
+        await finishPayment(settled.transaction_code ?? `MPESA${Date.now()}`);
+      } else {
+        throw new Error('Payment was not completed. Please check your phone and try again.');
+      }
     } catch (e: any) {
       console.error('M-Pesa payment error:', e);
       setDialogError(e.message || 'Payment failed. Check your M-Pesa prompts and retry.');
@@ -227,9 +256,16 @@ function PaymentPageInner() {
     if (cardCvc.length < 3)                     { setCardError('Enter a valid CVV.'); return; }
     setCardError(''); setDialogError(''); setProcessing(true); setPayStep('processing');
     try {
-      await subscribeToPlan(selectedPlan.id);
+       const paymentDetails={
+        card_name:cardName,
+        card_number: cardNum,
+        card_expiry: cardExp,
+        card_cvc: cardCvc
+      }
+     const response = await subscribeToPlan(selectedPlan.id,selectedQuality,paymentDetails,"card");
+      console.log('repsonse: ', response);
       await delay(2800);
-      await finishPayment(`CARD${Date.now()}`);
+     // await finishPayment(`CARD${Date.now()}`);
     } catch (e: any) {
       console.error('Card payment error:', e);
       setDialogError(e.message || 'Payment failed. Please verify your card details.');
@@ -237,19 +273,8 @@ function PaymentPageInner() {
     } finally { setProcessing(false); }
   };
 
-  const handleFreePlan = async () => {
-    setProcessing(true);
-    try {
-      await subscribeToPlan(selectedPlan.id);
-      await loadSubscription();
-      setPayStep('success');
-    } catch (e: any) {
-      console.error('Free plan activation error:', e);
-      setDialogError(e.message || 'Activation failed. Please retry.');
-    } finally { setProcessing(false); }
-  };
 
-  const handleConfirmAdPay = async (payment: AdPaymentData) => {
+  const handleConfirmAdPay = async (payment: PaymentData) => {
     const code = prompt('Enter M-Pesa transaction code:');
     if (!code?.trim()) return;
     try {
@@ -261,7 +286,7 @@ function PaymentPageInner() {
     }
   };
 
-  const handleFailAdPay = async (payment: AdPaymentData) => {
+  const handleFailAdPay = async (payment: PaymentData) => {
     try {
       await failAdPayment(payment.id, 'Cancelled by user');
       await loadAdPayments();
@@ -289,7 +314,7 @@ function PaymentPageInner() {
   const availableTabs = [
     !advertiserOnly && { key: 'plans' as PageTab,        label: 'Plans',        icon: <Zap size={14} aria-hidden="true" /> },
     !advertiserOnly && { key: 'subscription' as PageTab, label: 'Subscription', icon: <ShieldCheck size={14} aria-hidden="true" /> },
-    { key: 'ad_payments' as PageTab, label: 'Ad Payments', icon: <CreditCard size={14} aria-hidden="true" /> },
+    { key: 'ad_payments' as PageTab, label: 'Payments', icon: <CreditCard size={14} aria-hidden="true" /> },
   ].filter(Boolean) as { key: PageTab; label: string; icon: React.ReactNode }[];
 
   // ── Render ────────────────────────────────────────────
@@ -356,6 +381,7 @@ function PaymentPageInner() {
                   {plans.map(p => {
                     const active    = selectedSlug === p.slug;
                     const isCurrent = currentSub?.plan?.slug === p.slug;
+                    const price = (qualityPrice[selectedQuality] ?? 0) + p.price;
                     return (
                       <button
                         key={p.id}
@@ -388,9 +414,9 @@ function PaymentPageInner() {
                               className="text-[34px] font-semibold tracking-[-0.04em] font-mono"
                               style={{ color: active ? 'var(--green)' : 'var(--text)' }}
                             >
-                              {p.price_kes === 0 ? 'Free' : fmtKes(p.price_kes)}
+                              {price === 0 ? 'Free' : fmtKes(price)}
                             </span>
-                            {p.price_kes > 0 && (
+                            {price > 0 && (
                               <span className="text-[13px] text-[color:var(--muted)]">/ {p.duration_days}d</span>
                             )}
                           </div>
@@ -401,24 +427,34 @@ function PaymentPageInner() {
                         <div className="h-px bg-[color:var(--border)] my-3.5" />
                         <ul className="list-none flex flex-col gap-2">
                           <PlanFeature text={p.max_matches !== null ? `${p.max_matches} matches / cycle` : 'Unlimited matches'} />
-                          <PlanFeature text={p.max_streams !== null ? `${p.max_streams} streams` : 'Unlimited streams'} />
+                          <PlanFeature text={p.max_cameras !== null ? `${p.max_cameras} cameras` : 'Unlimited cameras'} />
                           {p.ads_enabled       && <PlanFeature text="Ad injection pipeline" />}
                           {p.analytics_enabled && <PlanFeature text="Analytics dashboard" />}
                         </ul>
+                         <ul className="list-none flex flex-row gap-2 mt-4">
+                          {p.quality?.map(q=>{
+                            return (
+                              <CheckBox q={q} selected={selectedQuality==q} onClick={(q)=>setSelectedQuality(q)}/>
+                            );
+                          })}
+                        </ul>
+                          <div className="flex items-center gap-4 flex-wrap mt-4">
+                  <button
+                    onClick={openDialog}
+                    disabled={currentSub?.plan_id==p.id}
+                    className={currentSub?.plan_id==p.id?"w-full h-11 px-4 rounded-lg border-none bg-[color:var(--faint)] text-white text-[14px] font-medium cursor-pointer inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity sm:w-auto sm:px-6":"w-full h-11 px-4 rounded-lg border-none bg-[color:var(--green)] text-white text-[14px] font-medium cursor-pointer inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity sm:w-auto sm:px-6"}
+                  >
+                    <Icon name="check" size={16} aria-hidden="true" />
+                    {p.price === 0
+                      ? `Activate ${p.name}`
+                      : `Subscribe — ${fmtKes(price ?? 0)}`}
+                  </button>
+                  </div>
                       </button>
                     );
                   })}
                 </div>
                 <div className="flex items-center gap-4 flex-wrap mt-4">
-                  <button
-                    onClick={openDialog}
-                    className="w-full h-11 px-4 rounded-lg border-none bg-[color:var(--green)] text-white text-[14px] font-medium cursor-pointer inline-flex items-center justify-center gap-2 hover:opacity-90 transition-opacity sm:w-auto sm:px-6"
-                  >
-                    <Icon name="check" size={16} aria-hidden="true" />
-                    {selectedPlan?.price_kes === 0
-                      ? `Activate ${selectedPlan?.name}`
-                      : `Subscribe — ${fmtKes(selectedPlan?.price_kes ?? 0)}`}
-                  </button>
                   <div className="flex items-center gap-1.5 text-[12px] text-[color:var(--faint)]">
                     <Lock size={11} aria-hidden="true" /> Secure checkout · Cancel anytime
                   </div>
@@ -472,7 +508,7 @@ function PaymentPageInner() {
                     value={`${daysLeft(currentSub.expires_at) || 0}d`}
                     tone={daysLeft(currentSub.expires_at) <= 5 ? 'red' : 'green'}
                   />
-                  <SubMetric icon={<CreditCard size={14} aria-hidden="true" />} label="Price" value={fmtKes(currentSub.plan?.price_kes ?? 0)} />
+                  <SubMetric icon={<CreditCard size={14} aria-hidden="true" />} label="Price" value={fmtKes(currentSub.plan?.price ?? 0)} />
                 </div>
                 <div className="flex gap-3 flex-wrap pt-1">
                   <button
@@ -503,7 +539,7 @@ function PaymentPageInner() {
         {tab === 'ad_payments' && (
           <div id="panel-ad_payments" role="tabpanel" aria-labelledby="ad_payments-tab" className="grid gap-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-[18px] font-semibold text-[color:var(--text)]">Advertisement Payments</h2>
+              <h2 className="text-[18px] font-semibold text-[color:var(--text)]">Payments</h2>
               <button
                 onClick={loadAdPayments}
                 disabled={adPaymentsLoading}
@@ -516,8 +552,8 @@ function PaymentPageInner() {
             {adPaymentsLoading ? <RowsSkeleton /> : adPayments.length === 0 ? (
               <div className="broadcast-card rounded-lg p-8 text-center text-[color:var(--muted)]">
                 <CreditCard size={40} className="mx-auto mb-3 opacity-40" aria-hidden="true" />
-                <p className="font-semibold text-[color:var(--text)] mb-1">No ad payments yet</p>
-                <p className="text-sm">Submit an advertisement campaign to create a payment record.</p>
+                <p className="font-semibold text-[color:var(--text)] mb-1">No payments yet</p>
+                <p className="text-sm">Submit an advertisement campaign or subscribe a plan to create a payment record.</p>
               </div>
             ) : (
               <div className="broadcast-card rounded-lg overflow-hidden">
@@ -525,7 +561,7 @@ function PaymentPageInner() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-[color:var(--border)] text-[11px] font-semibold uppercase tracking-[.05em] text-[color:var(--muted)]">
-                        {['Amount', 'Method', 'Reference', 'Status', 'Date', 'Actions'].map(h => (
+                        {['Amount', 'Method', 'Type','Reference', 'Status', 'Date', 'Actions'].map(h => (
                           <th key={h} scope="col" className="px-4 py-3 text-left">{h}</th>
                         ))}
                       </tr>
@@ -533,9 +569,10 @@ function PaymentPageInner() {
                     <tbody>
                       {paginatedAdPays.map(p => (
                         <tr key={p.id} className="border-b border-[color:var(--border)] last:border-none hover:bg-[color:var(--surface2)] transition-colors">
-                          <td className="px-4 py-3 font-semibold text-[color:var(--text)]">{fmtKes(p.amount_kes)}</td>
+                          <td className="px-4 py-3 font-semibold text-[color:var(--text)]">{fmtKes(p.amount)}</td>
                           <td className="px-4 py-3 text-[color:var(--muted)] capitalize">{p.payment_method.replace('_', ' ')}</td>
-                          <td className="px-4 py-3 text-[color:var(--muted)] font-mono text-xs">{p.transaction_code ?? p.mpesa_reference ?? '—'}</td>
+                          <td className="px-4 py-3 text-[color:var(--muted)] capitalize">{p.type.replace('_', ' ')}</td>
+                          <td className="px-4 py-3 text-[color:var(--muted)] font-mono text-xs">{p.transaction_code ?? p.reference ?? '—'}</td>
                           <td className="px-4 py-3"><AdPayStatusBadge status={p.status} /></td>
                           <td className="px-4 py-3 text-[color:var(--muted)]">{p.paid_at ? fmtDate(p.paid_at) : '—'}</td>
                           <td className="px-4 py-3">
@@ -607,7 +644,7 @@ function PaymentPageInner() {
               <div id="payment-dialog-title" className="text-[15px] font-medium text-[color:var(--text)]">
                 {payStep === 'success'
                   ? 'Payment confirmed'
-                  : `${selectedPlan.name}${selectedPlan.price_kes > 0 ? ` · ${fmtKes(selectedPlan.price_kes)}` : ' · Free'}`}
+                  : `${selectedPlan.name}${selectedPlan.price > 0 ? ` · ${fmtKes(selectedPlan.price+(qualityPrice[selectedQuality] ?? 0))}` : ' · Free'}`}
               </div>
               {!processing && (
                 <button
@@ -627,22 +664,6 @@ function PaymentPageInner() {
                 </div>
               )}
 
-              {payStep === 'free' && (
-                <div className="text-center py-4">
-                  <CheckCircle2 size={48} color="var(--green)" className="mx-auto mb-3" aria-hidden="true" />
-                  <div className="text-[16px] font-medium text-[color:var(--text)] mb-1.5">Activate free plan</div>
-                  <button
-                    onClick={handleFreePlan}
-                    disabled={processing}
-                    className="w-full h-[42px] px-4 rounded-lg border-none bg-[color:var(--green)] text-white text-[14px] font-medium cursor-pointer inline-flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-60"
-                  >
-                    {processing
-                      ? <><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Activating…</>
-                      : 'Activate & go to dashboard'}
-                  </button>
-                </div>
-              )}
-
               {payStep === 'method' && (
                 <div className="flex flex-col gap-2.5">
                   <MethodButton
@@ -655,9 +676,10 @@ function PaymentPageInner() {
                   <MethodButton
                     icon={<CreditCard size={20} aria-hidden="true" />}
                     label="Bank card"
-                    sub="Visa, Mastercard, Amex"
-                    active={payMethod === 'card'}
-                    onClick={() => { setPayMethod('card'); setPayStep('card_input'); }}
+                    sub="Coming soon — use M-Pesa for now"
+                    active={false}
+                    disabled
+                    onClick={() => {}}
                   />
                 </div>
               )}
@@ -696,7 +718,7 @@ function PaymentPageInner() {
                       onClick={handleMpesaPay}
                       className="flex-[2] h-[42px] rounded-lg border-none bg-[color:var(--green)] text-white text-[14px] font-medium cursor-pointer flex items-center justify-center gap-2"
                     >
-                      <Smartphone size={15} aria-hidden="true" /> Send STK push · {fmtKes(selectedPlan.price_kes)}
+                      <Smartphone size={15} aria-hidden="true" /> Send STK push · {fmtKes(selectedPlan.price+(qualityPrice[selectedQuality] ?? 0))}
                     </button>
                   </div>
                 </div>
@@ -722,7 +744,7 @@ function PaymentPageInner() {
                       onClick={handleCardPay}
                       className="flex-[2] h-[42px] rounded-lg border-none bg-[color:var(--green)] text-white text-[14px] font-medium cursor-pointer flex items-center justify-center gap-2"
                     >
-                      <Lock size={14} aria-hidden="true" /> Pay {fmtKes(selectedPlan.price_kes)}
+                      <Lock size={14} aria-hidden="true" /> Pay {fmtKes(selectedPlan.price+(qualityPrice[selectedQuality] ?? 0))}
                     </button>
                   </div>
                 </div>
@@ -817,6 +839,21 @@ function PlanFeature({ text }: { text: string }) {
   );
 }
 
+function CheckBox({ q,selected,onClick }:{q:number; selected?: boolean; onClick: (q:number) => void;}){
+  return (
+         <div>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <button type="button" onClick={() => onClick(q)}
+                    className={`w-5 h-5 mt-px rounded-[5px] shrink-0 flex items-center justify-center border cursor-pointer transition-all duration-[180ms] font-sans ${selected ? 'border-[var(--green)] bg-[var(--green)]' : 'border-[var(--border)] bg-[var(--field-bg)]'}`}>
+                    {selected && <Icon name="check" size={11} className="text-white" />}
+                  </button>
+                  <span className="text-[13px] text-[var(--muted)] leading-[1.55]">
+                    {q}p
+                  </span>
+                </label>
+              </div>
+  );
+}
 function SubMetric({ icon, label, value, tone }: {
   icon: React.ReactNode; label: string; value: string; tone?: 'green' | 'red';
 }) {
@@ -871,17 +908,19 @@ function AdPayStatusBadge({ status }: { status: string }) {
   );
 }
 
-function MethodButton({ icon, label, sub, active, onClick }: {
-  icon: React.ReactNode; label: string; sub: string; active: boolean; onClick: () => void;
+function MethodButton({ icon, label, sub, active, onClick, disabled }: {
+  icon: React.ReactNode; label: string; sub: string; active: boolean; onClick: () => void; disabled?: boolean;
 }) {
   return (
     <button
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
       className={[
-        'flex items-center gap-3.5 px-4 py-3.5 rounded-lg cursor-pointer text-left w-full transition-all',
-        active
+        'flex items-center gap-3.5 px-4 py-3.5 rounded-lg text-left w-full transition-all',
+        disabled ? 'cursor-not-allowed opacity-50 border border-[color:var(--border)] bg-[color:var(--surface2)]' : 'cursor-pointer',
+        !disabled && active
           ? 'border border-green-500/45 bg-green-500/[.07]'
-          : 'border border-[color:var(--border)] bg-[color:var(--surface2)] hover:border-green-500/25',
+          : !disabled ? 'border border-[color:var(--border)] bg-[color:var(--surface2)] hover:border-green-500/25' : '',
       ].join(' ')}
     >
       <div className={[

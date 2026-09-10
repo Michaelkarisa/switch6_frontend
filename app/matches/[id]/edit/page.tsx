@@ -28,7 +28,7 @@ export default function EditMatchPage() {
   const [awayGoals, setAwayGoals] = useState(0);
   const [error,     setError]     = useState('');
   const [success,   setSuccess]   = useState('');
-
+  
   useEffect(() => {
     getMatchById(matchId)
       .then((m: MatchData) => {
@@ -48,7 +48,7 @@ export default function EditMatchPage() {
     setSaving(true); setError('');
     try {
       const payload: UpdateMatchPayload = { status: status as MatchData['status'], venue, date, time, home_score: homeGoals, away_score: awayGoals };
-      await updateMatch(matchId, payload);
+      await updateMatch(match.id, payload);
       setSuccess('Match updated!');
       setTimeout(() => router.push('/matches'), 1500);
     } catch (e: any) {
