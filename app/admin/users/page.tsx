@@ -241,13 +241,13 @@ export default function AdminUsersPage() {
                           {tab === 'trash' ? (
                             <>
                               <button onClick={() => setConfirm({ userId: u.id, name: u.name, action: 'restore' })} disabled={acting === u.id}
-                                title="Restore"
-                                className="w-7 h-7 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                                title="Restore" aria-label="Restore"
+                                className="w-8 h-8 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
                                 <Icon name="check" size={13} />
                               </button>
                               <button onClick={() => setConfirm({ userId: u.id, name: u.name, action: 'force' })} disabled={acting === u.id}
-                                title="Permanently delete"
-                                className="w-7 h-7 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                                title="Permanently delete" aria-label="Permanently delete"
+                                className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                                 {acting === u.id ? <span className="spinner" /> : <Icon name="delete" size={13} />}
                               </button>
                             </>
@@ -255,25 +255,25 @@ export default function AdminUsersPage() {
                             <>
                               {u.status === 'suspended' ? (
                                 <button onClick={() => handleActivate(u.id)} disabled={acting === u.id}
-                                  title="Activate"
-                                  className="w-7 h-7 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                                  title="Activate" aria-label="Activate"
+                                className="w-8 h-8 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
                                   {acting === u.id ? <span className="spinner" /> : <Icon name="check" size={13} />}
                                 </button>
                               ) : (
                                 <button onClick={() => setConfirm({ userId: u.id, name: u.name, action: 'suspend' })} disabled={acting === u.id}
-                                  title="Suspend"
-                                  className="w-7 h-7 grid place-items-center rounded-lg border-none bg-yellow-500/10 text-yellow-400 cursor-pointer hover:bg-yellow-500/20 transition-colors disabled:opacity-50">
+                                  title="Suspend" aria-label="Suspend"
+                                className="w-8 h-8 grid place-items-center rounded-lg border-none bg-yellow-500/10 text-yellow-400 cursor-pointer hover:bg-yellow-500/20 transition-colors disabled:opacity-50">
                                   <Icon name="pause" size={13} />
                                 </button>
                               )}
                               <button onClick={() => handleImpersonate(u.id)} disabled={acting === u.id}
-                                title="Impersonate"
-                                className="w-7 h-7 grid place-items-center rounded-lg border-none bg-blue-500/10 text-[color:var(--blue)] cursor-pointer hover:bg-blue-500/20 transition-colors disabled:opacity-50">
+                                title="Impersonate" aria-label="Impersonate"
+                                className="w-8 h-8 grid place-items-center rounded-lg border-none bg-blue-500/10 text-[color:var(--blue)] cursor-pointer hover:bg-blue-500/20 transition-colors disabled:opacity-50">
                                 <Icon name="person" size={13} />
                               </button>
                               <button onClick={() => setConfirm({ userId: u.id, name: u.name, action: 'delete' })} disabled={acting === u.id}
-                                title="Move to trash"
-                                className="w-7 h-7 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                                title="Move to trash" aria-label="Move to trash"
+                                className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                                 <Icon name="delete" size={13} />
                               </button>
                             </>

@@ -93,9 +93,9 @@ function KpiCard({
 }) {
   const up = change ? parseFloat(change) >= 0 : null;
   return (
-    <div className="broadcast-card rounded-lg p-4 flex flex-col gap-3">
+    <div className="stat-card-gradient rounded-xl p-4 sm:p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between">
-        <div className="grid place-items-center w-9 h-9 rounded-lg"
+        <div className="grid place-items-center w-10 h-10 rounded-lg"
           style={{ background: color + '20', color }}>
           {icon}
         </div>
@@ -107,8 +107,8 @@ function KpiCard({
         )}
       </div>
       <div>
-        <div className="text-[22px] font-semibold leading-none tracking-[-0.03em] text-[color:var(--text)]">{value}</div>
-        <div className="text-[13px] font-medium text-[color:var(--text)] mt-1">{label}</div>
+        <div className="text-[24px] font-semibold leading-none tracking-[-0.03em] text-[color:var(--text)] sm:text-[26px]">{value}</div>
+        <div className="text-[13px] font-medium text-[color:var(--text)] mt-1.5">{label}</div>
         {sub && <div className="text-[12px] text-[color:var(--muted)] mt-0.5">{sub}</div>}
       </div>
     </div>

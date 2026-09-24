@@ -172,34 +172,34 @@ export default function AdminAdvertisementsPage() {
                         {tab === 'trash' ? (
                           <>
                             <button onClick={() => setConfirm({ adId: ad.id, action: 'restore' })} disabled={acting === ad.id}
-                              title="Restore" className="w-7 h-7 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                              title="Restore" aria-label="Restore" className="w-8 h-8 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
                               <Icon name="check" size={13} />
                             </button>
                             <button onClick={() => setConfirm({ adId: ad.id, action: 'force' })} disabled={acting === ad.id}
-                              title="Delete forever" className="w-7 h-7 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                              title="Delete forever" aria-label="Delete forever" className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                               {acting === ad.id ? <span className="spinner" /> : <Icon name="delete" size={13} />}
                             </button>
                           </>
                         ) : (
                           <>
                             <button onClick={() => handleAnalytics(ad.id)} disabled={acting === ad.id}
-                              title="Analytics" className="w-7 h-7 grid place-items-center rounded-lg border-none bg-blue-500/10 text-[color:var(--blue)] cursor-pointer hover:bg-blue-500/20 transition-colors disabled:opacity-50">
+                              title="Analytics" aria-label="Analytics" className="w-8 h-8 grid place-items-center rounded-lg border-none bg-blue-500/10 text-[color:var(--blue)] cursor-pointer hover:bg-blue-500/20 transition-colors disabled:opacity-50">
                               <Icon name="chart" size={13} />
                             </button>
                             {ad.status !== 'active' && (
                               <button onClick={() => handleSetStatus(ad.id, 'active')} disabled={acting === ad.id}
-                                title="Activate" className="w-7 h-7 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                                title="Activate" aria-label="Activate" className="w-8 h-8 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
                                 <Icon name="check" size={13} />
                               </button>
                             )}
                             {ad.status === 'active' && (
                               <button onClick={() => handleSetStatus(ad.id, 'paused')} disabled={acting === ad.id}
-                                title="Pause" className="w-7 h-7 grid place-items-center rounded-lg border-none bg-yellow-500/10 text-yellow-400 cursor-pointer hover:bg-yellow-500/20 transition-colors disabled:opacity-50">
+                                title="Pause" aria-label="Pause" className="w-8 h-8 grid place-items-center rounded-lg border-none bg-yellow-500/10 text-yellow-400 cursor-pointer hover:bg-yellow-500/20 transition-colors disabled:opacity-50">
                                 <Icon name="pause" size={13} />
                               </button>
                             )}
                             <button onClick={() => setConfirm({ adId: ad.id, action: 'delete' })} disabled={acting === ad.id}
-                              title="Move to trash" className="w-7 h-7 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                              title="Move to trash" aria-label="Move to trash" className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                               {acting === ad.id ? <span className="spinner" /> : <Icon name="delete" size={13} />}
                             </button>
                           </>
@@ -266,7 +266,8 @@ export default function AdminAdvertisementsPage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[16px] font-semibold text-[color:var(--text)]">Ad Analytics</h3>
                 <button onClick={() => setAnalytics(null)}
-                  className="w-7 h-7 grid place-items-center rounded-lg border-none bg-transparent text-[color:var(--muted)] cursor-pointer hover:text-[color:var(--text)]">
+                  aria-label="Close analytics"
+                  className="w-8 h-8 grid place-items-center rounded-lg border-none bg-transparent text-[color:var(--muted)] cursor-pointer hover:text-[color:var(--text)]">
                   <Icon name="close" size={15} />
                 </button>
               </div>

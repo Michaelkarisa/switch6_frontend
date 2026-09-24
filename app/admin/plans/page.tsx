@@ -196,10 +196,12 @@ export default function AdminPlansPage() {
                     {plan.is_active ? 'Deactivate' : 'Activate'}
                   </button>
                   <button onClick={() => setPlanForm({ ...plan, editing: plan.id })}
+                    aria-label="Edit plan"
                     className="w-8 h-8 grid place-items-center rounded-lg border border-[color:var(--border)] bg-[color:var(--surface2)] text-[color:var(--muted)] cursor-pointer hover:text-[color:var(--text)] transition-colors">
                     <Icon name="edit" size={13} />
                   </button>
                   <button onClick={() => handleDeletePlan(plan.id)} disabled={acting === plan.id}
+                    aria-label="Delete plan"
                     className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                     <Icon name="delete" size={13} />
                   </button>
@@ -246,13 +248,13 @@ export default function AdminPlansPage() {
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
                           <button onClick={() => setExtendModal({ subId: s.id, days: '30' })}
-                            title="Extend"
-                            className="w-7 h-7 grid place-items-center rounded-lg border-none bg-blue-500/10 text-[color:var(--blue)] cursor-pointer hover:bg-blue-500/20 transition-colors">
+                            title="Extend" aria-label="Extend subscription"
+                            className="w-8 h-8 grid place-items-center rounded-lg border-none bg-blue-500/10 text-[color:var(--blue)] cursor-pointer hover:bg-blue-500/20 transition-colors">
                             <Icon name="add-circle" size={13} />
                           </button>
                           <button onClick={() => handleRevoke(s.id)} disabled={acting === s.id}
-                            title="Revoke"
-                            className="w-7 h-7 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                            title="Revoke" aria-label="Revoke subscription"
+                            className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                             {acting === s.id ? <span className="spinner" /> : <Icon name="delete" size={13} />}
                           </button>
                         </div>
@@ -329,6 +331,7 @@ export default function AdminPlansPage() {
                       {acting === plan.id ? <span className="spinner" /> : 'Restore'}
                     </button>
                     <button onClick={() => handleForceDeletePlan(plan.id)} disabled={acting === plan.id}
+                      aria-label="Permanently delete plan"
                       className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                       <Icon name="delete" size={13} />
                     </button>

@@ -620,20 +620,30 @@ export const TopBar = memo(function TopBar({ userName, isDark, isNight = false, 
 TopBar.displayName = 'TopBar';
 
 // ─── StatCard ─────────────────────────────────────────────────
-export const StatCard = memo(function StatCard({ label, count, color, iconName }: {
+export const StatCard = memo(function StatCard({ label, count, color, iconName, insight, unit }: {
   label: string; count: number; color: string; iconName: string; isDark?: boolean;
+  /** Short, meaningful context under the number — e.g. "2 kick off today". */
+  insight?: string;
+  /** Eyebrow tag in the corner — defaults to nothing rather than a hardcoded lie. */
+  unit?: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg p-3.5 broadcast-card sm:p-5 sm:gap-4">
+    <div className="stat-card-gradient flex flex-col gap-3 rounded-xl p-4 sm:p-6 sm:gap-5">
       <div className="flex items-center justify-between">
-        <div className="grid place-items-center rounded-lg w-8 h-8 sm:w-[38px] sm:h-[38px]" style={{ background: `${color}20`, color }}>
-          <Icon name={iconName} size={18} />
+        <div className="grid place-items-center rounded-xl w-11 h-11 sm:w-[52px] sm:h-[52px]"
+          style={{ background: `color-mix(in srgb, ${color} 16%, transparent)`, color }}>
+          <Icon name={iconName} size={22} />
         </div>
-        <span className="text-[11px] font-medium text-[color:var(--muted)] uppercase tracking-wide">Matches</span>
+        {unit && (
+          <span className="text-[10px] font-semibold text-[color:var(--muted)] uppercase tracking-wide">{unit}</span>
+        )}
       </div>
       <div>
-        <div className="font-semibold leading-none text-[26px] tracking-[-0.04em] text-[color:var(--text)] font-mono sm:text-[36px]">{count}</div>
-        <div className="text-xs mt-1 font-normal text-[color:var(--muted)]">{label}</div>
+        <div className="font-semibold leading-none text-[30px] tracking-[-0.04em] text-[color:var(--text)] font-mono sm:text-[42px]">{count}</div>
+        <div className="text-[13px] mt-1.5 font-medium text-[color:var(--text2)]">{label}</div>
+        {insight && (
+          <div className="text-[11px] mt-1 font-normal text-[color:var(--muted)] leading-snug">{insight}</div>
+        )}
       </div>
     </div>
   );
@@ -701,8 +711,8 @@ export function MatchCardSkeleton() {
 
 export function StatCardSkeleton() {
   return (
-    <div className="rounded-lg p-5 flex flex-col gap-4 border border-[color:var(--border)] bg-[color:var(--card-bg)]">
-      <div className="flex items-center justify-between"><div className={`${SH} h-10 w-10 rounded-lg`} /><div className={`${SH} h-4 w-14`} /></div>
+    <div className="rounded-xl p-4 sm:p-6 flex flex-col gap-4 sm:gap-5 stat-card-gradient">
+      <div className="flex items-center justify-between"><div className={`${SH} h-11 w-11 sm:h-[52px] sm:w-[52px] rounded-xl`} /><div className={`${SH} h-4 w-14`} /></div>
       <div className="flex flex-col gap-2 mt-1"><div className={`${SH} h-9 w-1/2 rounded`} /><div className={`${SH} h-3 w-[65%]`} /></div>
     </div>
   );
@@ -727,7 +737,7 @@ export function DashboardSkeleton() {
         </div>
         <div className="rounded-lg p-4 flex flex-col gap-3 border border-[color:var(--border)] bg-[color:var(--card-bg)]"><MatchCardSkeleton /></div>
       </div>
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-5">{[0, 1, 2, 3, 4].map(i => <StatCardSkeleton key={i} />)}</div>
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-4">{[0, 1, 2, 3].map(i => <StatCardSkeleton key={i} />)}</div>
     </div>
   );
 }

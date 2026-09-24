@@ -216,7 +216,7 @@ export default function MatchesPage() {
                   <ScoreDisplay homeScore={match.homeTeam?.goals} awayScore={match.awayTeam?.goals} status={match.status} />
 
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => shareToWhatsApp(match)} title="Share on WhatsApp"
+                    <button onClick={() => shareToWhatsApp(match)} title="Share on WhatsApp" aria-label="Share on WhatsApp"
                       className="w-7 h-7 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors sm:w-8 sm:h-8">
                       <Icon name="share" size={13} />
                     </button>
@@ -227,12 +227,12 @@ export default function MatchesPage() {
                       </Link>
                     )}
                     {can.editMatch && (
-                      <Link href={`/matches/${match.slug}/edit`} title="Edit match"
+                      <Link href={`/matches/${match.slug}/edit`} title="Edit match" aria-label="Edit match"
                         className="w-7 h-7 grid place-items-center rounded-lg no-underline bg-[color:var(--surface2)] text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface3)] transition-colors sm:w-8 sm:h-8">
                         <Icon name="edit" size={13} />
                       </Link>
                     )}
-                     <Link href={`/matches/${match.slug}/analytics`} title="Match Analytics"
+                     <Link href={`/matches/${match.slug}/analytics`} title="Match Analytics" aria-label="Match analytics"
                         className="w-7 h-7 grid place-items-center rounded-lg no-underline bg-[color:var(--surface2)] text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface3)] transition-colors sm:w-8 sm:h-8">
                         <Icon name="analytics" size={13} />
                       </Link>
@@ -280,7 +280,7 @@ export default function MatchesPage() {
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md mx-4 rounded-xl broadcast-card overflow-hidden max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)] shrink-0">
               <div className="text-[15px] font-semibold text-[color:var(--text)]">Shared lineups</div>
-              <button onClick={() => setSharedOpen(false)} className="w-7 h-7 rounded-md grid place-items-center text-[color:var(--muted)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
+              <button onClick={() => setSharedOpen(false)} aria-label="Close shared lineups" className="w-8 h-8 rounded-md grid place-items-center text-[color:var(--muted)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
                 <Icon name="close" size={16} />
               </button>
             </div>
@@ -311,8 +311,8 @@ export default function MatchesPage() {
                             <span className="inline-block mt-1.5 text-[10px] font-semibold uppercase tracking-[.04em] text-green-400">Imported</span>
                           )}
                         </div>
-                        <button onClick={() => handleDismissShare(share)} title="Dismiss"
-                          className="w-6 h-6 shrink-0 rounded-md grid place-items-center text-[color:var(--faint)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
+                        <button onClick={() => handleDismissShare(share)} title="Dismiss" aria-label="Dismiss shared lineup"
+                          className="w-7 h-7 shrink-0 rounded-md grid place-items-center text-[color:var(--faint)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
                           <Icon name="close" size={12} />
                         </button>
                       </div>

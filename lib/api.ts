@@ -1479,9 +1479,23 @@ export async function getBidBasePrice(period: BidPeriod): Promise<number> {
   return data.base_price;
 }
 
+export interface BidAuctionStatus {
+  base_price:        number;
+  current_highest:   number;
+  minimum_next_bid:  number;
+  deadline:          string | null;
+  bidding_closed:    boolean;
+}
+
+/** Live snapshot of a match+period auction: current leading bid, minimum to outbid it, and the 1-hour deadline. */
+export async function getBidAuctionStatus(matchId: string, period: BidPeriod): Promise<BidAuctionStatus> {
+  const { data } = await apiFetch<BidAuctionStatus>(`/match-bids/status?match_id=${matchId}&period=${period}`, {}, true);
+  return data;
+}
+
 export async function createBidCampaign(payload: {
   title: string; file: File; bids: BidEntry[]; details: { phone: string };
-  target_tags?: string[]; self_advertise?: boolean; currency?: string;
+  target_tags?: string[]; currency?: string;
 }): Promise<{ advertisement: AdvertisementData; payment_id: string; total: number }> {
   const form = new FormData();
   form.append('title', payload.title);
@@ -1490,7 +1504,6 @@ export async function createBidCampaign(payload: {
   form.append('currency', payload.currency ?? 'KES');
   form.append('method', 'mpesa');
   form.append('details[phone]', payload.details.phone);
-  if (payload.self_advertise) form.append('self_advertise', '1');
   payload.bids.forEach((b, i) => {
     form.append(`bids[${i}][match_id]`, b.match_id);
     form.append(`bids[${i}][period]`, b.period);

@@ -71,7 +71,7 @@ const qualityPrice: Record<number,number> = {
   480: 0,
   720: 100,
   1080: 200,
-  2160: 300,
+  1440: 300,
   2160: 400,
 }
  

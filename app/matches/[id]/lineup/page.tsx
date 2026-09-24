@@ -807,7 +807,7 @@ const handleFormationChange = useCallback((fmt: string) => {
                       : <span className="text-[color:var(--muted)] text-[11px]">Not in squad</span>}
                 </div>
               </div>
-              <button onClick={() => setAssignDialog(null)} className="w-7 h-7 grid place-items-center rounded-lg text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface2)] border-none bg-transparent cursor-pointer transition-colors">
+              <button onClick={() => setAssignDialog(null)} aria-label="Close" className="w-8 h-8 grid place-items-center rounded-lg text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface2)] border-none bg-transparent cursor-pointer transition-colors">
                 <Icon name="close" size={15} />
               </button>
             </div>
@@ -889,7 +889,7 @@ const handleFormationChange = useCallback((fmt: string) => {
                 <div className="text-[15px] font-semibold text-[color:var(--text)]">Add Player</div>
                 <div className="text-[12px] text-[color:var(--muted)] mt-px">Added as unassigned — drag to pitch or assign</div>
               </div>
-              <button onClick={() => setShowAdd(false)} className="w-7 h-7 grid place-items-center rounded-lg text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface2)] border-none bg-transparent cursor-pointer">
+              <button onClick={() => setShowAdd(false)} aria-label="Close" className="w-8 h-8 grid place-items-center rounded-lg text-[color:var(--muted)] hover:text-[color:var(--text)] hover:bg-[color:var(--surface2)] border-none bg-transparent cursor-pointer">
                 <Icon name="close" size={15} />
               </button>
             </div>
@@ -1383,7 +1383,7 @@ function ShareLineupDialog({ matchId, clubId, onClose }: {
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--border)]">
           <div className="text-[15px] font-semibold text-[color:var(--text)]">Share lineup</div>
-          <button onClick={onClose} className="w-7 h-7 rounded-md grid place-items-center text-[color:var(--muted)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
+          <button onClick={onClose} aria-label="Close share lineup dialog" className="w-8 h-8 rounded-md grid place-items-center text-[color:var(--muted)] hover:text-[color:var(--text)] cursor-pointer border-none bg-transparent">
             <Icon name="close" size={16} />
           </button>
         </div>

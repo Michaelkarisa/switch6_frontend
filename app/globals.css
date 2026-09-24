@@ -84,6 +84,15 @@ a{-webkit-tap-highlight-color:transparent}
   box-shadow: var(--shadow-card);
 }
 
+/* Gradient card surface for dashboard stat/feature cards — light grey to
+   white in light theme; uses each theme's own surface tokens so it degrades
+   sensibly in dark/night instead of looking wrong. */
+.stat-card-gradient {
+  background: linear-gradient(160deg, var(--surface2) 0%, var(--card-bg) 62%);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
 /* Hide scrollbar but keep scroll functionality */
 .scrollbar-none{scrollbar-width:none}
 .scrollbar-none::-webkit-scrollbar{display:none}

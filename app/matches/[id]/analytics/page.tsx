@@ -50,17 +50,17 @@ function KpiCard({
   icon: ReactNode; color: string;
 }) {
   return (
-    <div className="broadcast-card rounded-lg p-4 flex flex-col gap-2">
+    <div className="stat-card-gradient rounded-xl p-4 sm:p-5 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-[.05em] text-[color:var(--muted)]">
           {label}
         </span>
-        <span className="w-7 h-7 rounded-lg grid place-items-center"
+        <span className="w-9 h-9 rounded-lg grid place-items-center"
           style={{ background: color + '22', color }}>
           {icon}
         </span>
       </div>
-      <div className="text-[26px] font-bold leading-none tracking-[-0.03em]" style={{ color }}>
+      <div className="text-[28px] font-bold leading-none tracking-[-0.03em]" style={{ color }}>
         {value}
       </div>
       {sub && <div className="text-[11px] text-[color:var(--muted)]">{sub}</div>}
@@ -341,16 +341,40 @@ export default function MatchAnalyticsPage() {
           <>
             {/* ── KPI row 1: viewers ──────────────────────────────── */}
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <KpiCard label="Total views"     value={fmt(ov!.total_views)}     icon={<Eye size={14}/>}       color={BLUE}   />
-              {/*<KpiCard label="Unique viewers"  value={fmt(ov!.unique_views)}  icon={<Users size={14}/>}     color={GREEN}  />*/}
-              <KpiCard label="Peak views"    value={fmt(vw!.peak_views)}    icon={<TrendingUp size={14}/>} color={GOLD}  />
-             {/*<KpiCard label="Anonymous"       value={fmt(ov!.anonymous_views)} icon={<Globe size={14}/>}     color={MUTED}  sub="non-logged-in" />*/}
+              <KpiCard
+                label="Total views"
+                value={fmt(ov!.total_views)}
+                icon={<Eye size={14}/>}
+                color={BLUE}
+                sub={`${fmt(ov!.unique_views)} unique`}
+              />
+              <KpiCard
+                label="Unique viewers"
+                value={fmt(ov!.unique_views)}
+                icon={<Users size={14}/>}
+                color={GREEN}
+                sub={ov!.total_views > 0 ? `${Math.round((ov!.unique_views / ov!.total_views) * 100)}% of total views` : 'No views yet'}
+              />
+              <KpiCard
+                label="Peak views"
+                value={fmt(vw!.peak_views)}
+                icon={<TrendingUp size={14}/>}
+                color={GOLD}
+                sub={vw!.views_second_half > vw!.views_first_half ? 'Busiest in 2nd half' : vw!.views_first_half > 0 ? 'Busiest in 1st half' : undefined}
+              />
+              <KpiCard
+                label="Anonymous"
+                value={fmt(ov!.anonymous_views)}
+                icon={<Globe size={14}/>}
+                color={MUTED}
+                sub={ov!.total_views > 0 ? `${Math.round((ov!.anonymous_views / ov!.total_views) * 100)}% not logged in` : undefined}
+              />
             </div>
 
             {/* ── KPI row 2: ads ──────────────────────────────────── */}
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <KpiCard label="Ad impressions"   value={fmt(ads!.impressions)}            icon={<Tv size={14}/>}           color={PURPLE} />
-              <KpiCard label="Ad plays"         value={fmt(ads!.plays)}                  icon={<Play size={14}/>}         color={TEAL}   />
+              <KpiCard label="Ad impressions"   value={fmt(ads!.impressions)}            icon={<Tv size={14}/>}           color={PURPLE} sub={`${fmt(ads!.plays)} played`} />
+              <KpiCard label="Ad plays"         value={fmt(ads!.plays)}                  icon={<Play size={14}/>}         color={TEAL}   sub={`${fmt(ads!.completed)} completed`} />
               <KpiCard label="Completion rate"  value={`${ads!.completion_rate_pct}%`}   icon={<CheckCircle2 size={14}/>} color={GREEN}  sub={`${ads!.play_rate_pct}% play rate`} />
               <KpiCard label="Total watch time" value={fmtTime(ads!.total_play_time_secs)} icon={<Clock size={14}/>}     color={GOLD}   sub="ads watched" />
             </div>

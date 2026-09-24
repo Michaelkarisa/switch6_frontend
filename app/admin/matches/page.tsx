@@ -191,23 +191,23 @@ export default function AdminMatchesPage() {
                       <div className="flex items-center gap-1">
                         {tab === 'trash' ? (
                           <>
-                            <button title="Restore" onClick={() => setConfirm({ matchId: m.id, action: 'restore' })} disabled={acting === m.id}
-                              className="w-7 h-7 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
+                            <button aria-label="Restore" title="Restore" onClick={() => setConfirm({ matchId: m.id, action: 'restore' })} disabled={acting === m.id}
+                              className="w-8 h-8 grid place-items-center rounded-lg border-none bg-green-500/10 text-[color:var(--green)] cursor-pointer hover:bg-green-500/20 transition-colors disabled:opacity-50">
                               <Icon name="check" size={13} />
                             </button>
-                            <button title="Delete forever" onClick={() => setConfirm({ matchId: m.id, action: 'force' })} disabled={acting === m.id}
-                              className="w-7 h-7 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                            <button aria-label="Delete forever" title="Delete forever" onClick={() => setConfirm({ matchId: m.id, action: 'force' })} disabled={acting === m.id}
+                              className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                               {acting === m.id ? <span className="spinner" /> : <Icon name="delete" size={13} />}
                             </button>
                           </>
                         ) : (
                           <>
-                            <button title="Reassign author" onClick={() => setReassign({ matchId: m.id, newAuthorId: '' })}
-                              className="w-7 h-7 grid place-items-center rounded-lg border-none bg-blue-500/10 text-[color:var(--blue)] cursor-pointer hover:bg-blue-500/20 transition-colors">
+                            <button aria-label="Reassign author" title="Reassign author" onClick={() => setReassign({ matchId: m.id, newAuthorId: '' })}
+                              className="w-8 h-8 grid place-items-center rounded-lg border-none bg-blue-500/10 text-[color:var(--blue)] cursor-pointer hover:bg-blue-500/20 transition-colors">
                               <Icon name="person" size={13} />
                             </button>
-                            <button title="Move to trash" onClick={() => setConfirm({ matchId: m.id, action: 'softDelete' })} disabled={acting === m.id}
-                              className="w-7 h-7 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                            <button aria-label="Move to trash" title="Move to trash" onClick={() => setConfirm({ matchId: m.id, action: 'softDelete' })} disabled={acting === m.id}
+                              className="w-8 h-8 grid place-items-center rounded-lg border-none bg-red-500/10 text-[color:var(--red)] cursor-pointer hover:bg-red-500/20 transition-colors disabled:opacity-50">
                               {acting === m.id ? <span className="spinner" /> : <Icon name="delete" size={13} />}
                             </button>
                           </>

@@ -4,20 +4,26 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
+  ResponsiveContainer, BarChart as RBarChart, Bar, XAxis, YAxis,
+  Tooltip as RTooltip, CartesianGrid,
+} from 'recharts';
+import {
   BadgeCheck, CalendarDays, CheckCircle2, ChevronDown, CircleMinus, CirclePlus,
   Clapperboard, Clock3, Megaphone, RadioTower, Send, UploadCloud, Video, XCircle,
   BarChart3, TrendingUp, Eye, Users, Wifi, Youtube, Facebook, MonitorPlay, Activity,
   Zap, Target, ArrowUpRight, ArrowDownRight, Globe, Loader2, Trash2, RefreshCw,
   Image as ImageIcon, Info, Gavel, MapPin, Trophy, X as XIcon,
 } from 'lucide-react';
-import { PageShell } from '@/components/ui';
+import { Icon, PageShell } from '@/components/ui';
+import { useRoleGuard } from '@/lib/auth';
 import {
-  UserPrefs, getMatchesByAuthorId, isBroadcaster, getClubs,
+  UserPrefs, getMatchesByAuthorId, isBroadcaster, isAdvertiser, getClubs,
   getAdvertisements, createAdvertisement, deleteAdvertisement,
   pollPaymentUntilSettled,
-  getBidEligibleMatches, getBidBasePrice, createBidCampaign, getMyBids,
+  getBidEligibleMatches, getBidBasePrice, getBidAuctionStatus, createBidCampaign, getMyBids,
   type MatchData, type AdvertisementData, type AdAnalyticsData, type Club,
-  type BidPeriod, type BidEntry, type MatchBidData,
+  type BidPeriod, type BidEntry, type MatchBidData, type BidAuctionStatus,
+  ROLES,
 } from '@/lib/api';
 
 const isValidKenyanPhone = (phone: string): boolean => {
@@ -59,12 +65,12 @@ const imageMinHeight = 480;
 const imageMaxSizeMB = 10;
 
 const platformTone: Record<Platform, string> = {
-  youtube:     'text-red-500 border-red-500/30 bg-red-500/10',
-  facebook:    'text-blue-500 border-blue-500/30 bg-blue-500/10',
-  rtmp_custom: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
+  youtube:     'text-[var(--red)] border-[var(--red)]/30 bg-[var(--red)]/10',
+  facebook:    'text-[var(--blue)] border-[var(--blue)]/30 bg-[var(--blue)]/10',
+  rtmp_custom: 'text-[var(--gold)] border-[var(--gold)]/30 bg-[var(--gold)]/10',
 };
 const platformBar: Record<Platform, string> = {
-  youtube: 'bg-red-500', facebook: 'bg-blue-500', rtmp_custom: 'bg-yellow-400',
+  youtube: 'bg-[var(--red)]', facebook: 'bg-[var(--blue)]', rtmp_custom: 'bg-[var(--gold)]',
 };
 
 function buildCampaignsFromMatches(matches: MatchData[]): AdCampaign[] {
@@ -117,7 +123,9 @@ const fmt = (n: number) =>
 const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(2)}%` : '0%');
 
 export default function AdvertisementPage() {
-  const [tab, setTab] = useState<Tab>('campaign');
+  useRoleGuard([ROLES.ADVERTISER, ROLES.BROADCASTER, ROLES.ADMIN, ROLES.SUPERADMIN]);
+
+  const [tab, setTab] = useState<Tab>(() => isAdvertiser() ? 'analytics' : 'campaign');
   const [campaigns, setCampaigns] = useState<AdCampaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<AdCampaign | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
@@ -142,6 +150,7 @@ export default function AdvertisementPage() {
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [mpesaPhone, setMpesaPhone] = useState('');
   const [awaitingPayment, setAwaitingPayment] = useState(false);
+  const [generalSelfAdvertise, setGeneralSelfAdvertise] = useState(false);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -263,9 +272,10 @@ export default function AdvertisementPage() {
       form.append('currency', 'KES');
       form.append('method', 'mpesa');
       form.append('details[phone]', mpesaPhone);
+      if (generalSelfAdvertise) form.append('self_advertise', '1');
       const ad = await createAdvertisement(form);
       showNotice('success', `Advertisement created for KES ${ad.price ?? '—'}. Check your phone for the M-Pesa prompt.`);
-      setAdTitle(''); setAdAltText(''); resetMedia();
+      setAdTitle(''); setAdAltText(''); setGeneralSelfAdvertise(false); resetMedia();
       await loadData();
 
       if (ad.payment_id) {
@@ -303,7 +313,7 @@ export default function AdvertisementPage() {
               className={[
                 'fixed left-3 right-3 top-20 z-[80] rounded-lg border px-4 py-3 text-sm font-semibold shadow-xl backdrop-blur',
                 'sm:left-auto sm:right-5 sm:max-w-sm',
-                notice.type === 'success' ? 'border-green-500/40 bg-green-500/15 text-green-400' : 'border-red-500/40 bg-red-500/15 text-red-400',
+                notice.type === 'success' ? 'border-[var(--green)]/40 bg-[var(--green)]/15 text-[var(--green)]' : 'border-[var(--red)]/40 bg-[var(--red)]/15 text-[var(--red)]',
               ].join(' ')}
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
             >{notice.text}</motion.div>
@@ -314,11 +324,11 @@ export default function AdvertisementPage() {
         <div className="mb-5 flex w-full gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-1 sm:w-fit">
           {([
             { key: 'campaign',  label: 'Campaign Builder', icon: <Megaphone size={15} /> },
-            { key: 'bid',       label: 'Bid Tab',           icon: <Gavel size={15} /> },
+            ...(isBroadcaster() ? [] : [{ key: 'bid' as Tab, label: 'Bid Tab', icon: <Gavel size={15} /> }]),
             { key: 'analytics', label: 'Analytics',        icon: <BarChart3 size={15} /> },
           ] as { key: Tab; label: string; icon: ReactNode }[]).map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={['flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition sm:px-4', tab === t.key ? 'bg-green-500 text-black shadow-lg shadow-green-500/30' : 'text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]'].join(' ')}>
+              className={['flex flex-1 sm:flex-none items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition sm:px-4', tab === t.key ? 'bg-[var(--green)] text-black shadow-lg shadow-[var(--green)]/30' : 'text-[var(--muted)] hover:bg-[var(--surface2)] hover:text-[var(--text)]'].join(' ')}>
               {t.icon}<span className="hidden xs:inline sm:inline">{t.label}</span>
             </button>
           ))}
@@ -342,6 +352,7 @@ export default function AdvertisementPage() {
                 inputRef={inputRef} price={price} submitting={submitting}
                 mpesaPhone={mpesaPhone} setMpesaPhone={setMpesaPhone}
                 awaitingPayment={awaitingPayment}
+                selfAdvertise={generalSelfAdvertise} setSelfAdvertise={setGeneralSelfAdvertise}
                 onMediaPick={handleMediaPick} onResetMedia={() => inputRef.current?.click()}
                 onSubmit={submitAdvertisement}
               />
@@ -397,6 +408,7 @@ function CampaignBuilder({
   videoDurationSeconds, imageDimensions,
   isMediaValid, inputRef, price, submitting,
   mpesaPhone, setMpesaPhone, awaitingPayment,
+  selfAdvertise, setSelfAdvertise,
   onMediaPick, onResetMedia, onSubmit,
 }: {
   adTitle: string; setAdTitle: (v: string) => void;
@@ -411,6 +423,7 @@ function CampaignBuilder({
   inputRef: React.RefObject<HTMLInputElement | null>;
   price: number; submitting: boolean;
   mpesaPhone: string; setMpesaPhone: (v: string) => void; awaitingPayment: boolean;
+  selfAdvertise: boolean; setSelfAdvertise: (v: boolean) => void;
   onMediaPick: (f?: File) => void; onResetMedia: () => void; onSubmit: () => void;
 }) {
   const positionInfo = positionPricing[selectedPosition];
@@ -428,21 +441,31 @@ function CampaignBuilder({
           <div className="mt-5">
             <label className="block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)] mb-2">Advertisement Title *</label>
             <input value={adTitle} onChange={e => setAdTitle(e.target.value)} placeholder="e.g. Safaricom Half-Time Spot"
-              className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-[15px] text-[var(--text)] outline-none focus:border-green-500/60 transition-colors" />
+              className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-[15px] text-[var(--text)] outline-none focus:border-[var(--green)]/60 transition-colors" />
           </div>
 
           <div className="mt-4">
             <label className="block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)] mb-2">M-Pesa Phone *</label>
             <input value={mpesaPhone} onChange={e => setMpesaPhone(e.target.value)} placeholder="0712 345 678"
-              className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-[15px] text-[var(--text)] outline-none focus:border-green-500/60 transition-colors" />
+              className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-[15px] text-[var(--text)] outline-none focus:border-[var(--green)]/60 transition-colors" />
             <p className="mt-1.5 text-[11px] text-[var(--muted)]">The STK push to pay for this campaign will be sent here.</p>
           </div>
+
+          {isBroadcaster() && (
+            <label className="mt-4 flex items-start gap-2 text-xs text-[var(--muted)]">
+              <input type="checkbox" checked={selfAdvertise} onChange={e => setSelfAdvertise(e.target.checked)} className="mt-0.5" />
+              <span>
+                Self-advertise (e.g. showing a sponsor's involvement with your club, or promoting your own merchandise).
+                Restricted to showing only on matches you created.
+              </span>
+            </label>
+          )}
 
           {mediaType === 'image' && (
             <div className="mt-4">
               <label className="block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)] mb-2">Alt Text (Accessibility)</label>
               <input value={adAltText} onChange={e => setAdAltText(e.target.value)} placeholder="Describe the image for screen readers..."
-                className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-[15px] text-[var(--text)] outline-none focus:border-green-500/60 transition-colors" />
+                className="w-full h-11 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-[15px] text-[var(--text)] outline-none focus:border-[var(--green)]/60 transition-colors" />
             </div>
           )}
 
@@ -454,7 +477,7 @@ function CampaignBuilder({
                 <IconButton disabled={selectedEventCount <= 1} onClick={() => setSelectedEventCount((v) => Math.max(1, v - 1))}>
                   <CircleMinus size={22} />
                 </IconButton>
-                <div className="grid h-12 flex-1 place-items-center rounded-lg border border-green-500/40 bg-green-500/10 text-[20px] font-semibold text-[var(--text)]">
+                <div className="grid h-12 flex-1 place-items-center rounded-lg border border-[var(--green)]/40 bg-[var(--green)]/10 text-[20px] font-semibold text-[var(--text)]">
                   {selectedEventCount}
                 </div>
                 <IconButton onClick={() => setSelectedEventCount((v) => v + 1)}><CirclePlus size={22} /></IconButton>
@@ -466,12 +489,12 @@ function CampaignBuilder({
               <div className="mt-3 flex flex-wrap gap-2">
                 {mediaType === 'video' ? durations.map((secs) => (
                   <button key={secs} onClick={() => setSelectedDuration(secs)}
-                    className={['flex-1 min-w-[52px] rounded-lg border px-2 py-2 text-sm font-semibold transition', selectedDuration === secs ? 'border-green-500 bg-green-500/15 text-green-400' : 'border-[var(--border)] bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--text)]'].join(' ')}>
+                    className={['flex-1 min-w-[52px] rounded-lg border px-2 py-2 text-sm font-semibold transition', selectedDuration === secs ? 'border-[var(--green)] bg-[var(--green)]/15 text-[var(--green)]' : 'border-[var(--border)] bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--text)]'].join(' ')}>
                     {secs}s
                   </button>
                 )) : (
                   <div className="text-sm text-[var(--muted)]">
-                    Images display for <span className="font-semibold text-green-400">10 seconds</span> by default
+                    Images display for <span className="font-semibold text-[var(--green)]">10 seconds</span> by default
                   </div>
                 )}
               </div>
@@ -491,7 +514,7 @@ function CampaignBuilder({
               <ChevronDown size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
             </div>
             <div className="mt-3 flex items-start gap-2 text-xs text-[var(--muted)]">
-              <Info size={14} className="mt-0.5 shrink-0 text-blue-400" />
+              <Info size={14} className="mt-0.5 shrink-0 text-[var(--blue)]" />
               <span>{positionInfo.description}</span>
             </div>
           </div>
@@ -506,7 +529,7 @@ function CampaignBuilder({
             {(['video', 'image'] as MediaType[]).map(mt => (
               <button key={mt} type="button" onClick={() => { setMediaType(mt); onResetMedia(); }}
                 className={['flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition flex items-center justify-center gap-1.5',
-                  mediaType === mt ? 'border-green-500 bg-green-500/15 text-green-400' : 'border-[var(--border)] bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--text)]'].join(' ')}>
+                  mediaType === mt ? 'border-[var(--green)] bg-[var(--green)]/15 text-[var(--green)]' : 'border-[var(--border)] bg-[var(--surface2)] text-[var(--muted)] hover:text-[var(--text)]'].join(' ')}>
                 {mt === 'video' ? <Video size={14} /> : <ImageIcon size={14} />}
                 {mt.charAt(0).toUpperCase() + mt.slice(1)}
               </button>
@@ -516,15 +539,15 @@ function CampaignBuilder({
           {/* Preview or drop zone */}
           {isMediaValid && (mediaType === 'video' ? videoUrl : imageUrl) ? (
             <div className="mt-5">
-              <div className="overflow-hidden rounded-lg border border-green-500/30 bg-[var(--bg3)]">
+              <div className="overflow-hidden rounded-lg border border-[var(--green)]/30 bg-[var(--bg3)]">
                 {mediaType === 'video'
                   ? <video src={videoUrl!} controls className="block max-h-[280px] w-full sm:max-h-[360px]" />
                   : <img src={imageUrl!} alt={adAltText || 'Ad creative preview'} className="block max-h-[280px] w-full object-contain sm:max-h-[360px]" />
                 }
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3">
-                <CheckCircle2 size={18} className="text-green-400 shrink-0" />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-green-400">{mediaFileName}</span>
+                <CheckCircle2 size={18} className="text-[var(--green)] shrink-0" />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--green)]">{mediaFileName}</span>
                 {mediaType === 'video' && videoDurationSeconds && <span className="broadcast-label shrink-0">{videoDurationSeconds}s</span>}
                 {mediaType === 'image' && imageDimensions && <span className="broadcast-label shrink-0">{imageDimensions.width}×{imageDimensions.height}</span>}
                 <button onClick={onResetMedia} className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] px-3 py-1.5 text-sm font-semibold text-[var(--text)] hover:bg-[var(--surface3)]">Change</button>
@@ -532,9 +555,9 @@ function CampaignBuilder({
             </div>
           ) : (
             <button onClick={() => inputRef.current?.click()}
+              style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--blue) 10%, transparent), color-mix(in srgb, var(--green) 10%, transparent))' }}
               className={['mt-5 flex min-h-[160px] w-full items-center justify-center rounded-lg border-2 border-dashed p-5 text-center transition sm:min-h-[190px]',
-                'bg-gradient-to-br from-blue-500/10 to-green-500/10',
-                mediaFileName && !isMediaValid ? 'border-red-500/60 text-red-400' : 'border-[var(--border)] text-green-400 hover:border-green-500/50'].join(' ')}>
+                mediaFileName && !isMediaValid ? 'border-[var(--red)]/60 text-[var(--red)]' : 'border-[var(--border)] text-[var(--green)] hover:border-[var(--green)]/50'].join(' ')}>
               <div>
                 {mediaFileName && !isMediaValid ? <XCircle size={40} className="mx-auto" /> : <UploadCloud size={40} className="mx-auto" />}
                 <div className="mt-3 text-base font-semibold">
@@ -556,7 +579,7 @@ function CampaignBuilder({
       {/* ── Sidebar (stacks below on mobile, sticky on lg) ── */}
       <aside className="grid gap-5 lg:sticky lg:top-24">
         {/* Pricing */}
-        <section className="broadcast-card rounded-lg border-yellow-400/30 p-4 sm:p-5">
+        <section className="broadcast-card rounded-lg border-[var(--gold)]/30 p-4 sm:p-5">
           <SectionTitle icon={<BadgeCheck size={19} />} title="Pricing Summary" tone="gold" />
           <div className="mt-4 grid gap-3">
             <PriceRow label="Base Rate"  value={`KES 500 × ${selectedEventCount}`} />
@@ -566,11 +589,11 @@ function CampaignBuilder({
           <div className="my-4 h-px bg-[var(--surface3)]" />
           <div className="flex items-end justify-between gap-3">
             <div className="broadcast-label">Estimated total</div>
-            <div className="text-[22px] font-semibold leading-none text-green-400 sm:text-[24px]">KES {price.toLocaleString()}</div>
+            <div className="text-[22px] font-semibold leading-none text-[var(--green)] sm:text-[24px]">KES {price.toLocaleString()}</div>
           </div>
           <button onClick={onSubmit} disabled={!isMediaValid || submitting || awaitingPayment || !adTitle.trim() || !isValidKenyanPhone(mpesaPhone)}
             className={['mt-5 w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 font-semibold transition',
-              isMediaValid && !submitting && !awaitingPayment && adTitle.trim() && isValidKenyanPhone(mpesaPhone) ? 'bg-green-500 text-white hover:bg-green-400' : 'cursor-not-allowed bg-green-500/60 text-[var(--text)]/80'].join(' ')}>
+              isMediaValid && !submitting && !awaitingPayment && adTitle.trim() && isValidKenyanPhone(mpesaPhone) ? 'bg-[var(--green)] text-white hover:bg-[var(--green)]' : 'cursor-not-allowed bg-[var(--green)]/60 text-[var(--text)]/80'].join(' ')}>
             {submitting
               ? <><Loader2 size={16} className="animate-spin" /> Submitting…</>
               : awaitingPayment
@@ -601,12 +624,12 @@ function CampaignBuilder({
               const isSel = pos === selectedPosition;
               return (
                 <div key={pos} className={['flex items-center justify-between rounded-lg border p-2.5 sm:p-3 transition',
-                  isSel ? 'border-green-500/40 bg-green-500/10' : 'border-[var(--border)] bg-[var(--surface2)] hover:bg-[var(--surface3)]'].join(' ')}>
+                  isSel ? 'border-[var(--green)]/40 bg-[var(--green)]/10' : 'border-[var(--border)] bg-[var(--surface2)] hover:bg-[var(--surface3)]'].join(' ')}>
                   <div className="min-w-0 mr-2">
-                    <div className={['text-sm font-semibold truncate', isSel ? 'text-green-400' : 'text-[var(--text)]'].join(' ')}>{pos}</div>
+                    <div className={['text-sm font-semibold truncate', isSel ? 'text-[var(--green)]' : 'text-[var(--text)]'].join(' ')}>{pos}</div>
                     <div className="text-xs text-[var(--muted)] mt-0.5 line-clamp-2">{info.description}</div>
                   </div>
-                  <div className={['text-sm font-bold shrink-0', isSel ? 'text-green-400' : 'text-yellow-400'].join(' ')}>×{info.multiplier}</div>
+                  <div className={['text-sm font-bold shrink-0', isSel ? 'text-[var(--green)]' : 'text-[var(--gold)]'].join(' ')}>×{info.multiplier}</div>
                 </div>
               );
             })}
@@ -658,33 +681,59 @@ function AnalyticsDashboard({ campaigns, selected, onSelect, totals, onDeleteAd 
 
       {/* KPI grid — 2 cols on mobile, 4 on xl */}
       <div className="grid gap-3 grid-cols-2 xl:grid-cols-4">
-        <KpiCard icon={<Eye size={20} />}      label="Impressions" value={fmt(totals.impressions)} sub={`${campaigns.length} matches`}    tone="blue"  delta={12.4} />
-        <KpiCard icon={<Target size={20} />}   label="Clicks"      value={fmt(totals.clicks)}      sub={`${overallCtr}% CTR`}             tone="green" delta={8.1} />
-        <KpiCard icon={<Users size={20} />}    label="Reach"       value={fmt(totals.reach)}        sub="unique viewers"                   tone="gold"  delta={21.7} />
-        <KpiCard icon={<Activity size={20} />} label="Revenue"     value={`KES ${fmt(totals.revenue)}`} sub="all campaigns"               tone="red"   delta={5.3} />
+        <KpiCard icon={<Eye size={20} />}      label="Impressions" value={fmt(totals.impressions)} sub={`${campaigns.length} matches`}    tone="blue"  />
+        <KpiCard icon={<Target size={20} />}   label="Clicks"      value={fmt(totals.clicks)}      sub={`${overallCtr}% CTR`}             tone="green" />
+        <KpiCard icon={<Users size={20} />}    label="Reach"       value={fmt(totals.reach)}        sub="unique viewers"                   tone="gold"  />
+        <KpiCard icon={<Activity size={20} />} label="Revenue"     value={`KES ${fmt(totals.revenue)}`} sub="all campaigns"               tone="green"   />
       </div>
+
+      {/* Spend by campaign — what the advertiser actually wants to see: how their money performed */}
+      {campaigns.length > 1 && (
+        <div className="broadcast-card rounded-lg p-4">
+          <SectionTitle icon={<BarChart3 size={18} />} title="Performance by campaign" tone="green" />
+          <ResponsiveContainer width="100%" height={180} className="mt-3">
+            <RBarChart data={campaigns.slice(0, 8).map(c => ({ name: c.matchLabel, clicks: c.totalClicks, impressions: c.totalImpressions }))} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'var(--muted)' }} tickLine={false} axisLine={false} interval={0} angle={-15} textAnchor="end" height={42} />
+              <YAxis tick={{ fontSize: 10, fill: 'var(--muted)' }} tickLine={false} axisLine={false} width={40} />
+              <RTooltip
+                content={({ active, payload }) =>
+                  active && payload?.length ? (
+                    <div className="bg-[var(--surface)] border border-[var(--border)] rounded px-2 py-1.5 text-[11px] text-[var(--text)]">
+                      <div>{fmt(payload[0]?.value as number)} clicks</div>
+                      <div className="text-[var(--muted)]">{fmt(payload[1]?.value as number)} impressions</div>
+                    </div>
+                  ) : null
+                }
+              />
+              <Bar dataKey="clicks" fill="var(--green)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="impressions" fill="var(--blue)" fillOpacity={0.35} radius={[3, 3, 0, 0]} />
+            </RBarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* Campaign list + detail */}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(260px,.45fr)_1fr]">
         {/* Campaign list */}
         <div className="broadcast-card overflow-hidden rounded-xl">
           <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
-            <MonitorPlay size={16} className="text-green-400" />
+            <MonitorPlay size={16} className="text-[var(--green)]" />
             <span className="text-sm font-semibold text-[var(--text)]">Campaigns</span>
-            <span className="ml-auto rounded-full bg-green-500/10 px-2 py-1 text-xs font-medium text-green-400">{campaigns.length}</span>
+            <span className="ml-auto rounded-full bg-[var(--green)]/10 px-2 py-1 text-xs font-medium text-[var(--green)]">{campaigns.length}</span>
           </div>
           <div className="max-h-[420px] overflow-y-auto lg:max-h-[520px]">
             {campaigns.map((camp) => (
               <button key={camp.id} onClick={() => handleSelect(camp)}
                 className={['block w-full border-b border-[var(--border)] px-4 py-3 text-left transition',
-                  selected?.id === camp.id ? 'border-l-4 border-l-green-500 bg-green-500/10' : 'border-l-4 border-l-transparent hover:bg-[var(--surface2)]'].join(' ')}>
+                  selected?.id === camp.id ? 'border-l-4 border-l-[var(--green)] bg-[var(--green)]/10' : 'border-l-4 border-l-transparent hover:bg-[var(--surface2)]'].join(' ')}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex-1 truncate text-sm font-semibold text-[var(--text)]">{camp.matchLabel}</div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <StatusDot status={camp.status} />
                     {camp.apiAd && (
                       <button onClick={(e) => { e.stopPropagation(); onDeleteAd(camp.apiAd!); }}
-                        className="grid place-items-center w-6 h-6 rounded text-[var(--faint)] hover:text-red-400 hover:bg-red-500/10 transition">
+                        className="grid place-items-center w-6 h-6 rounded text-[var(--faint)] hover:text-[var(--red)] hover:bg-[var(--red)]/10 transition">
                         <Trash2 size={12} />
                       </button>
                     )}
@@ -692,9 +741,9 @@ function AnalyticsDashboard({ campaigns, selected, onSelect, totals, onDeleteAd 
                 </div>
                 <div className="mt-1 text-xs font-medium text-[var(--muted)]">{camp.league} · {camp.date}</div>
                 <div className="mt-2 flex flex-wrap gap-2 sm:gap-3">
-                  <span className="text-xs font-medium text-blue-400">{fmt(camp.totalImpressions)} imp</span>
-                  <span className="text-xs font-medium text-green-400">{pct(camp.totalClicks, camp.totalImpressions)} CTR</span>
-                  {camp.apiAd && <span className="text-xs font-medium text-yellow-400 capitalize">{camp.apiAd.status}</span>}
+                  <span className="text-xs font-medium text-[var(--blue)]">{fmt(camp.totalImpressions)} imp</span>
+                  <span className="text-xs font-medium text-[var(--green)]">{pct(camp.totalClicks, camp.totalImpressions)} CTR</span>
+                  {camp.apiAd && <span className="text-xs font-medium text-[var(--gold)] capitalize">{camp.apiAd.status}</span>}
                 </div>
               </button>
             ))}
@@ -750,7 +799,7 @@ function CampaignDetail({ campaign }: { campaign: AdCampaign }) {
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <StatusBadgeAd status={campaign.status} />
-            <span className="rounded-lg bg-yellow-400/10 px-3 py-2 text-sm font-semibold text-yellow-400">KES {campaign.revenue.toLocaleString()}</span>
+            <span className="rounded-lg bg-[var(--gold)]/10 px-3 py-2 text-sm font-semibold text-[var(--gold)]">KES {campaign.revenue.toLocaleString()}</span>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
@@ -765,7 +814,7 @@ function CampaignDetail({ campaign }: { campaign: AdCampaign }) {
         <>
           <div className="broadcast-card rounded-lg p-4 sm:p-5">
             <div className="mb-4 flex items-center gap-2">
-              <Globe size={16} className="text-blue-400" />
+              <Globe size={16} className="text-[var(--blue)]" />
               <span className="text-sm font-semibold text-[var(--text)]">Platform Breakdown</span>
               <span className="broadcast-label ml-auto">RTMP Streams</span>
             </div>
@@ -778,7 +827,7 @@ function CampaignDetail({ campaign }: { campaign: AdCampaign }) {
 
           <div className="broadcast-card rounded-lg p-4 sm:p-5">
             <div className="mb-4 flex items-center gap-2">
-              <TrendingUp size={16} className="text-green-400" />
+              <TrendingUp size={16} className="text-[var(--green)]" />
               <span className="text-sm font-semibold text-[var(--text)]">Viewer Engagement</span>
             </div>
             <ViewerChart streams={campaign.streams} />
@@ -788,7 +837,7 @@ function CampaignDetail({ campaign }: { campaign: AdCampaign }) {
 
       <div className="broadcast-card rounded-lg p-4 sm:p-5">
         <div className="mb-4 flex items-center gap-2">
-          <Zap size={16} className="text-yellow-400" />
+          <Zap size={16} className="text-[var(--gold)]" />
           <span className="text-sm font-semibold text-[var(--text)]">Ad Injection Events</span>
         </div>
         <InjectionTimeline campaign={campaign} />
@@ -878,7 +927,7 @@ function InjectionTimeline({ campaign }: { campaign: AdCampaign }) {
       {events.map((ev, i) => (
         <div key={i} className="relative flex items-start gap-3 pb-3 last:pb-0">
           {i < events.length - 1 && <div className="absolute left-[17px] top-8 bottom-0 w-px bg-[var(--surface3)]" />}
-          <div className={['z-10 grid h-9 w-9 shrink-0 place-items-center rounded-full border', ev.done ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-[var(--border)] bg-[var(--surface2)] text-[var(--muted)]'].join(' ')}>
+          <div className={['z-10 grid h-9 w-9 shrink-0 place-items-center rounded-full border', ev.done ? 'border-[var(--green)]/40 bg-[var(--green)]/10 text-[var(--green)]' : 'border-[var(--border)] bg-[var(--surface2)] text-[var(--muted)]'].join(' ')}>
             {ev.done ? <CheckCircle2 size={14} /> : <div className="h-2 w-2 rounded-full bg-slate-500" />}
           </div>
           <div className="pt-1.5 min-w-0">
@@ -906,15 +955,21 @@ function AnalyticsSkeleton() {
 }
 
 // ── Primitives ────────────────────────────────────────────────
-function toneClasses(tone: string) {
-  const t: Record<string, string> = {
-    green: 'text-green-400 border-green-500/30 bg-green-500/10',
-    blue:  'text-blue-400 border-blue-500/30 bg-blue-500/10',
-    gold:  'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
-    red:   'text-red-400 border-red-500/30 bg-red-500/10',
-    muted: 'text-[var(--muted)] border-[var(--border)] bg-[var(--surface2)]',
+const TONE_COLOR: Record<string, string> = {
+  green: 'var(--green)', blue: 'var(--blue)', gold: 'var(--gold)', red: 'var(--red)', muted: 'var(--muted)',
+};
+
+/** Inline style using the app's actual palette tokens — not generic Tailwind colors. */
+function toneStyle(tone: string): React.CSSProperties {
+  const color = TONE_COLOR[tone] ?? TONE_COLOR.muted;
+  if (tone === 'muted' || !TONE_COLOR[tone]) {
+    return { color, borderColor: 'var(--border)', background: 'var(--surface2)' };
+  }
+  return {
+    color,
+    borderColor: `color-mix(in srgb, ${color} 30%, transparent)`,
+    background: `color-mix(in srgb, ${color} 10%, transparent)`,
   };
-  return t[tone] ?? t.muted;
 }
 
 function Hero({ count, duration, position, valid, mediaType }: { count: number; duration: number; position: AdPosition; valid: boolean; mediaType: MediaType }) {
@@ -939,14 +994,15 @@ function Hero({ count, duration, position, valid, mediaType }: { count: number; 
 }
 
 function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
-  return <div className={['rounded-lg border px-3 py-2', toneClasses(tone)].join(' ')}><div className="broadcast-label">{label}</div><div className="text-[15px] font-medium">{value}</div></div>;
+  return <div className="rounded-lg border px-3 py-2" style={toneStyle(tone)}><div className="broadcast-label">{label}</div><div className="text-[15px] font-medium">{value}</div></div>;
 }
 
 function SectionTitle({ icon, title, tone }: { icon: ReactNode; title: string; tone: 'green' | 'blue' | 'gold' | 'red' }) {
+  const style = toneStyle(tone);
   return (
     <div className="flex items-center gap-3">
-      <span className={['grid h-9 w-9 place-items-center rounded-lg border sm:h-10 sm:w-10', toneClasses(tone)].join(' ')}>{icon}</span>
-      <h2 className={['text-[15px] font-medium sm:text-[16px]', toneClasses(tone).split(' ')[0]].join(' ')}>{title}</h2>
+      <span className="grid h-9 w-9 place-items-center rounded-lg border sm:h-10 sm:w-10" style={style}>{icon}</span>
+      <h2 className="text-[15px] font-medium sm:text-[16px]" style={{ color: style.color }}>{title}</h2>
     </div>
   );
 }
@@ -956,7 +1012,7 @@ function Label({ icon, text }: { icon: ReactNode; text: string }) {
 }
 
 function IconButton({ children, disabled, onClick }: { children: ReactNode; disabled?: boolean; onClick: () => void }) {
-  return <button onClick={onClick} disabled={disabled} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-green-500/30 bg-green-500/10 text-green-400 transition hover:bg-green-500/20 disabled:cursor-not-allowed disabled:opacity-40">{children}</button>;
+  return <button onClick={onClick} disabled={disabled} className="grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-[var(--green)]/30 bg-[var(--green)]/10 text-[var(--green)] transition hover:bg-[var(--green)]/20 disabled:cursor-not-allowed disabled:opacity-40">{children}</button>;
 }
 
 function PriceRow({ label, value }: { label: string; value: ReactNode }) {
@@ -964,20 +1020,22 @@ function PriceRow({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function WorkflowStep({ label, active }: { label: string; active: boolean }) {
-  return <div className={['mt-3 flex items-center justify-between gap-3 rounded-lg border p-2.5 sm:p-3', active ? 'border-green-500/30 bg-green-500/10' : 'border-[var(--border)] bg-[var(--surface2)]'].join(' ')}>
+  return <div className={['mt-3 flex items-center justify-between gap-3 rounded-lg border p-2.5 sm:p-3', active ? 'border-[var(--green)]/30 bg-[var(--green)]/10' : 'border-[var(--border)] bg-[var(--surface2)]'].join(' ')}>
     <span className="text-sm font-semibold text-[var(--text)] truncate">{label}</span>
-    <span className={['text-xs font-semibold uppercase tracking-[.04em] shrink-0', active ? 'text-green-400' : 'text-[var(--muted)]'].join(' ')}>{active ? 'READY' : 'WAITING'}</span>
+    <span className={['text-xs font-semibold uppercase tracking-[.04em] shrink-0', active ? 'text-[var(--green)]' : 'text-[var(--muted)]'].join(' ')}>{active ? 'READY' : 'WAITING'}</span>
   </div>;
 }
 
-function KpiCard({ icon, label, value, sub, tone, delta }: { icon: ReactNode; label: string; value: string; sub: string; tone: string; delta: number }) {
-  const up = delta >= 0;
+function KpiCard({ icon, label, value, sub, tone, delta }: { icon: ReactNode; label: string; value: string; sub: string; tone: string; delta?: number }) {
+  const up = delta != null && delta >= 0;
   return (
     <div className="broadcast-card relative overflow-hidden rounded-lg p-3 sm:p-5">
       <div style={{ position: 'absolute', right: -40, top: -40, width: 128, height: 128, borderRadius: '50%', background: tone === 'green' ? 'rgba(10,143,82,.08)' : tone === 'blue' ? 'rgba(26,95,212,.08)' : tone === 'gold' ? 'rgba(143,101,0,.08)' : 'rgba(192,41,29,.08)', filter: 'blur(16px)', pointerEvents: 'none' }} />
       <div className="relative flex items-start justify-between">
-        <div className={['grid h-9 w-9 place-items-center rounded-lg border sm:h-11 sm:w-11', toneClasses(tone)].join(' ')}>{icon}</div>
-        <span className={['flex items-center gap-0.5 text-xs font-semibold', up ? 'text-green-400' : 'text-red-400'].join(' ')}>{up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(delta)}%</span>
+        <div className="grid h-9 w-9 place-items-center rounded-lg border sm:h-11 sm:w-11" style={toneStyle(tone)}>{icon}</div>
+        {delta != null && (
+          <span className={['flex items-center gap-0.5 text-xs font-semibold', up ? 'text-[var(--green)]' : 'text-[var(--red)]'].join(' ')}>{up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}{Math.abs(delta)}%</span>
+        )}
       </div>
       <div className="relative mt-3 text-[20px] font-semibold leading-none text-[var(--text)] sm:mt-4 sm:text-[24px]">{value}</div>
       <div className="relative mt-1.5 text-xs font-medium text-[var(--text)] sm:text-sm">{label}</div>
@@ -987,16 +1045,18 @@ function KpiCard({ icon, label, value, sub, tone, delta }: { icon: ReactNode; la
 }
 
 function MiniKpi({ label, value, tone }: { label: string; value: string; tone: string }) {
-  return <div className={['rounded-lg border p-2.5 text-center sm:p-3', toneClasses(tone)].join(' ')}><div className="text-[15px] font-semibold sm:text-[16px]">{value}</div><div className="mt-1 text-[10px] font-medium uppercase tracking-[.04em] text-[var(--muted)]">{label}</div></div>;
+  return <div className="rounded-lg border p-2.5 text-center sm:p-3" style={toneStyle(tone)}><div className="text-[15px] font-semibold sm:text-[16px]">{value}</div><div className="mt-1 text-[10px] font-medium uppercase tracking-[.04em] text-[var(--muted)]">{label}</div></div>;
 }
 
 function StatCell({ label, value, tone }: { label: string; value: string; tone: string | Platform }) {
-  const toneClass = tone === 'youtube' || tone === 'facebook' || tone === 'rtmp_custom' ? platformTone[tone].split(' ')[0] : toneClasses(tone).split(' ')[0];
-  return <div className="text-center"><div className={['text-xs font-semibold sm:text-sm', toneClass].join(' ')}>{value}</div><div className="text-[10px] font-medium uppercase tracking-[.04em] text-[var(--muted)]">{label}</div></div>;
+  const isPlatform = tone === 'youtube' || tone === 'facebook' || tone === 'rtmp_custom';
+  const style: React.CSSProperties = isPlatform ? {} : { color: toneStyle(tone).color };
+  const className = isPlatform ? ['text-xs font-semibold sm:text-sm', platformTone[tone as Platform].split(' ')[0]].join(' ') : 'text-xs font-semibold sm:text-sm';
+  return <div className="text-center"><div className={className} style={style}>{value}</div><div className="text-[10px] font-medium uppercase tracking-[.04em] text-[var(--muted)]">{label}</div></div>;
 }
 
 function HeroMetric({ label, value, tone }: { label: string; value: string; tone: string }) {
-  return <div className={['rounded-lg border px-3 py-2 sm:px-4 sm:py-3', toneClasses(tone)].join(' ')}><div className="broadcast-label">{label}</div><div className="mt-0.5 text-[18px] font-semibold sm:mt-1 sm:text-[20px]">{value}</div></div>;
+  return <div className="rounded-lg border px-3 py-2 sm:px-4 sm:py-3" style={toneStyle(tone)}><div className="broadcast-label">{label}</div><div className="mt-0.5 text-[18px] font-semibold sm:mt-1 sm:text-[20px]">{value}</div></div>;
 }
 
 function PlatformPill({ icon, label, platform }: { icon: ReactNode; label: string; platform: Platform }) {
@@ -1004,13 +1064,13 @@ function PlatformPill({ icon, label, platform }: { icon: ReactNode; label: strin
 }
 
 function StatusDot({ status }: { status: AdCampaign['status'] }) {
-  const cfg   = { live: 'bg-red-500/10 text-red-400', scheduled: 'bg-blue-500/10 text-blue-400', upcoming: 'bg-yellow-400/10 text-yellow-400', completed: 'bg-green-500/10 text-green-400' }[status];
+  const cfg   = { live: 'bg-[var(--red)]/10 text-[var(--red)]', scheduled: 'bg-[var(--blue)]/10 text-[var(--blue)]', upcoming: 'bg-[var(--gold)]/10 text-[var(--gold)]', completed: 'bg-[var(--green)]/10 text-[var(--green)]' }[status];
   const label = { live: 'LIVE', scheduled: 'SCHED', upcoming: 'UPCOMING', completed: 'DONE' }[status];
   return <span className={['shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-[.04em]', cfg].join(' ')}>{label}</span>;
 }
 
 function StatusBadgeAd({ status }: { status: AdCampaign['status'] }) {
-  const cfg   = { live: 'bg-red-500/10 text-red-400', scheduled: 'bg-blue-500/10 text-blue-400', upcoming: 'bg-yellow-400/10 text-yellow-400', completed: 'bg-green-500/10 text-green-400' }[status];
+  const cfg   = { live: 'bg-[var(--red)]/10 text-[var(--red)]', scheduled: 'bg-[var(--blue)]/10 text-[var(--blue)]', upcoming: 'bg-[var(--gold)]/10 text-[var(--gold)]', completed: 'bg-[var(--green)]/10 text-[var(--green)]' }[status];
   const label = { live: '● LIVE', scheduled: 'SCHEDULED', upcoming: 'UPCOMING', completed: 'COMPLETED' }[status];
   return <span className={['rounded-md px-2.5 py-1.5 text-xs font-semibold uppercase tracking-[.04em]', cfg].join(' ')}>{label}</span>;
 }
@@ -1021,6 +1081,16 @@ const PERIOD_LABEL: Record<BidPeriod, string> = {
   halftime:     'Half-time',
   fulltime:     'Full-time',
 };
+
+/** "Closes in 42m" / "Closes in 1h 12m" from an ISO deadline string. */
+function deadlineLabel(deadlineIso: string): string {
+  const msLeft = new Date(deadlineIso).getTime() - Date.now();
+  if (msLeft <= 0) return 'Closing…';
+  const totalMinutes = Math.ceil(msLeft / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `Closes in ${hours}h ${minutes}m` : `Closes in ${minutes}m`;
+}
 
 type BasketEntry = BidEntry & { key: string; matchLabel: string };
 
@@ -1047,9 +1117,12 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
   const [phone, setPhone] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [selfAdvertise, setSelfAdvertise] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [awaitingPayment, setAwaitingPayment] = useState(false);
+  // Live auction status per match+period ("<matchId>:<period>"), fetched
+  // for whatever's currently displayed so bidders see the real minimum
+  // (they must outbid the current highest, not just meet the base price).
+  const [auctionStatus, setAuctionStatus] = useState<Record<string, BidAuctionStatus>>({});
 
   // My bids
   const [myBids, setMyBids] = useState<MatchBidData[]>([]);
@@ -1080,13 +1153,54 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
     return () => clearTimeout(handle);
   }, [dateFilter, stadiumFilter, clubFilter]);
 
+  const displayedMatches = matches;
+
+  // Fetch live auction status (current highest bid, minimum to outbid,
+  // deadline) for whatever matches are currently displayed.
+  useEffect(() => {
+    if (displayedMatches.length === 0) return;
+    let cancelled = false;
+    const periods: BidPeriod[] = ['before_match', 'halftime', 'fulltime'];
+    Promise.all(
+      displayedMatches.flatMap(m => periods.map(async period => {
+        try {
+          const status = await getBidAuctionStatus(m.id, period);
+          return [`${m.id}:${period}`, status] as const;
+        } catch {
+          return null;
+        }
+      }))
+    ).then(results => {
+      if (cancelled) return;
+      setAuctionStatus(prev => {
+        const next = { ...prev };
+        for (const r of results) {
+          if (r) next[r[0]] = r[1];
+        }
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [displayedMatches]);
+
+  const minimumFor = (matchId: string, period: BidPeriod) =>
+    auctionStatus[`${matchId}:${period}`]?.minimum_next_bid ?? basePrices[period];
+
   const addToBasket = (match: MatchData, period: BidPeriod) => {
     const key = `${match.id}:${period}`;
+    const status = auctionStatus[key];
+    if (status?.bidding_closed) {
+      onNotice('error', `Bidding has closed for ${PERIOD_LABEL[period]} on this match.`);
+      return;
+    }
     const raw = amountInputs[key];
     const amount = Number(raw);
-    const base = basePrices[period];
-    if (!amount || amount < base) {
-      onNotice('error', `Bid for ${PERIOD_LABEL[period]} must be at least KES ${base.toLocaleString()}.`);
+    const min = minimumFor(match.id, period);
+    if (!amount || amount < min) {
+      const reason = status && status.current_highest > 0
+        ? `must outbid the current highest bid — at least KES ${min.toLocaleString()}`
+        : `must be at least KES ${min.toLocaleString()}`;
+      onNotice('error', `Bid for ${PERIOD_LABEL[period]} ${reason}.`);
       return;
     }
     if (basket.some(b => b.key === key)) {
@@ -1124,7 +1238,6 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
         file,
         bids: basket.map(({ match_id, period, amount }) => ({ match_id, period, amount })),
         details: { phone },
-        self_advertise: selfAdvertise,
       });
       onNotice('success', `Bid campaign submitted for KES ${result.total.toLocaleString()}. Check your phone for the M-Pesa prompt.`);
       setBasket([]); setTitle(''); setFile(null); setImagePreview(null);
@@ -1154,9 +1267,9 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
   const statusBadge = (status: MatchBidData['status']) => {
     const cfg: Record<MatchBidData['status'], string> = {
       pending_payment: 'bg-yellow-500/15 text-yellow-500',
-      pending:         'bg-blue-500/15 text-blue-400',
-      won:             'bg-green-500/15 text-green-400',
-      lost:            'bg-red-500/15 text-red-400',
+      pending:         'bg-[var(--blue)]/15 text-[var(--blue)]',
+      won:             'bg-[var(--green)]/15 text-[var(--green)]',
+      lost:            'bg-[var(--red)]/15 text-[var(--red)]',
       refunded:        'bg-[var(--surface3)] text-[var(--muted)]',
     };
     const label: Record<MatchBidData['status'], string> = {
@@ -1176,14 +1289,14 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
           </p>
           <div className="grid gap-2 sm:grid-cols-3">
             <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)}
-              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60" />
+              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-[var(--green)]/60" />
             <div className="relative">
               <MapPin size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
               <input value={stadiumFilter} onChange={e => setStadiumFilter(e.target.value)} placeholder="Stadium / ground"
-                className="h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] pl-8 pr-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60" />
+                className="h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] pl-8 pr-3 text-sm text-[var(--text)] outline-none focus:border-[var(--green)]/60" />
             </div>
             <select value={clubFilter} onChange={e => setClubFilter(e.target.value)}
-              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60">
+              className="h-10 rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-[var(--green)]/60">
               <option value="">All clubs</option>
               {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -1193,14 +1306,14 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
         {/* Matches */}
         {loadingMatches ? (
           <div className="broadcast-card rounded-lg p-10 text-center text-sm text-[var(--muted)]">Loading matches…</div>
-        ) : matches.length === 0 ? (
+        ) : displayedMatches.length === 0 ? (
           <div className="broadcast-card rounded-lg p-10 text-center text-sm text-[var(--muted)]">No matches match your filters.</div>
         ) : (
-          matches.map((m, idx) => (
+          displayedMatches.map((m, idx) => (
             <div key={m.id} className="broadcast-card rounded-lg p-4">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-green-400">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--green)]">
                     <Trophy size={12} /> Rank #{idx + 1} by traction
                   </div>
                   <div className="mt-1 text-[15px] font-semibold text-[var(--text)]">
@@ -1216,25 +1329,43 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
                 {(['before_match', 'halftime', 'fulltime'] as BidPeriod[]).map(period => {
                   const key = `${m.id}:${period}`;
                   const inBasket = basket.some(b => b.key === key);
+                  const status = auctionStatus[key];
+                  const minimum = status?.minimum_next_bid ?? basePrices[period];
+                  const closed = !!status?.bidding_closed;
                   return (
                     <div key={period} className="rounded-lg border border-[var(--border)] bg-[var(--surface2)] p-2.5">
-                      <div className="text-[11px] font-semibold uppercase tracking-[.04em] text-[var(--muted)]">{PERIOD_LABEL[period]}</div>
-                      <div className="mt-0.5 text-xs text-[var(--muted)]">Base KES {basePrices[period].toLocaleString()}</div>
-                      {inBasket ? (
-                        <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-green-400">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] font-semibold uppercase tracking-[.04em] text-[var(--muted)]">{PERIOD_LABEL[period]}</div>
+                        {status?.deadline && !closed && (
+                          <span className="text-[9px] font-semibold text-[var(--gold)]">{deadlineLabel(status.deadline)}</span>
+                        )}
+                      </div>
+                      {status && status.current_highest > 0 ? (
+                        <div className="mt-0.5 text-xs text-[var(--muted)]">
+                          Highest: <span className="font-semibold text-[var(--text)]">KES {status.current_highest.toLocaleString()}</span>
+                        </div>
+                      ) : (
+                        <div className="mt-0.5 text-xs text-[var(--muted)]">No bids yet · base KES {basePrices[period].toLocaleString()}</div>
+                      )}
+                      {closed ? (
+                        <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-[var(--muted)]">
+                          <Icon name="close" size={12} /> Bidding closed
+                        </div>
+                      ) : inBasket ? (
+                        <div className="mt-2 flex items-center gap-1 text-xs font-semibold text-[var(--green)]">
                           <CheckCircle2 size={13} /> Added
                         </div>
                       ) : (
                         <div className="mt-2 flex items-center gap-1.5">
                           <input
-                            type="number" min={basePrices[period]}
+                            type="number" min={minimum}
                             value={amountInputs[key] ?? ''}
                             onChange={e => setAmountInputs(prev => ({ ...prev, [key]: e.target.value }))}
-                            placeholder={String(basePrices[period])}
-                            className="h-8 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--field-bg)] px-2 text-xs text-[var(--text)] outline-none focus:border-green-500/60"
+                            placeholder={`Min ${minimum}`}
+                            className="h-8 w-full min-w-0 rounded-md border border-[var(--border)] bg-[var(--field-bg)] px-2 text-xs text-[var(--text)] outline-none focus:border-[var(--green)]/60"
                           />
                           <button onClick={() => addToBasket(m, period)}
-                            className="h-8 shrink-0 rounded-md bg-green-500 px-2 text-xs font-semibold text-black hover:bg-green-400">
+                            className="h-8 shrink-0 rounded-md bg-[var(--green)] px-2 text-xs font-semibold text-black hover:bg-[var(--green)]">
                             Bid
                           </button>
                         </div>
@@ -1291,12 +1422,12 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
                     <div className="text-xs font-medium text-[var(--text)]">{b.matchLabel}</div>
                     <div className="text-[11px] text-[var(--muted)]">{PERIOD_LABEL[b.period]} · KES {b.amount.toLocaleString()}</div>
                   </div>
-                  <button onClick={() => removeFromBasket(b.key)} className="text-[var(--muted)] hover:text-red-400"><XIcon size={14} /></button>
+                  <button onClick={() => removeFromBasket(b.key)} className="text-[var(--muted)] hover:text-[var(--red)]"><XIcon size={14} /></button>
                 </div>
               ))}
               <div className="my-2 h-px bg-[var(--surface3)]" />
               <div className="flex items-center justify-between text-sm font-semibold text-[var(--text)]">
-                <span>Total</span><span className="text-green-400">KES {total.toLocaleString()}</span>
+                <span>Total</span><span className="text-[var(--green)]">KES {total.toLocaleString()}</span>
               </div>
             </div>
           )}
@@ -1306,30 +1437,23 @@ function BidTab({ onNotice }: { onNotice: (type: 'success' | 'error', text: stri
           <SectionTitle icon={<UploadCloud size={19} />} title="Campaign creative" tone="blue" />
           <label className="mt-2 block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)]">Title *</label>
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Derby Day Half-time Spot"
-            className="mt-1.5 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60" />
+            className="mt-1.5 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-[var(--green)]/60" />
 
           <label className="mt-3 block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)]">Image (image only for bid slots) *</label>
-          <label className="mt-1.5 flex h-24 cursor-pointer items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--field-bg)] text-xs text-[var(--muted)] hover:border-green-500/50">
+          <label className="mt-1.5 flex h-24 cursor-pointer items-center justify-center rounded-lg border border-dashed border-[var(--border)] bg-[var(--field-bg)] text-xs text-[var(--muted)] hover:border-[var(--green)]/50">
             {imagePreview ? <img src={imagePreview} alt="" className="h-full rounded-lg object-contain" /> : <span className="flex items-center gap-1.5"><ImageIcon size={15} /> Upload image</span>}
             <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={e => handleFilePick(e.target.files?.[0])} />
           </label>
 
           <label className="mt-3 block text-[11px] font-semibold uppercase tracking-[.05em] text-[var(--muted)]">M-Pesa phone *</label>
           <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="0712 345 678"
-            className="mt-1.5 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-green-500/60" />
-
-          {isBroadcaster() && (
-            <label className="mt-3 flex items-center gap-2 text-xs text-[var(--muted)]">
-              <input type="checkbox" checked={selfAdvertise} onChange={e => setSelfAdvertise(e.target.checked)} />
-              I'm advertising my own match (self-advertise)
-            </label>
-          )}
+            className="mt-1.5 h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--field-bg)] px-3 text-sm text-[var(--text)] outline-none focus:border-[var(--green)]/60" />
 
           <button
             onClick={handleSubmit}
             disabled={submitting || awaitingPayment || basket.length === 0}
             className={['mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition',
-              !submitting && !awaitingPayment && basket.length > 0 ? 'bg-green-500 text-black hover:bg-green-400' : 'cursor-not-allowed bg-green-500/60 text-black/70'].join(' ')}
+              !submitting && !awaitingPayment && basket.length > 0 ? 'bg-[var(--green)] text-black hover:bg-[var(--green)]' : 'cursor-not-allowed bg-[var(--green)]/60 text-black/70'].join(' ')}
           >
             {submitting
               ? <><Loader2 size={16} className="animate-spin" /> Submitting…</>
